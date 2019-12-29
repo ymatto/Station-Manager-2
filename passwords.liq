@@ -1,1 +1,0 @@
-icecastpassword = "owlhousesourcekonnekt"

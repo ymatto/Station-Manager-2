@@ -2,6 +2,7 @@
 # Log dir
 set("log.file.path","/tmp/StationManager2_test.log")
 
+# sets variable: icecastpassword
 %include "passwords.liq"
 
 # Write tracklog

@@ -1,8 +1,20 @@
 #!/Users/omm/.opam/default/bin/liquidsoap -v
 # Log dir
-set("log.file.path","/tmp/basic-radio.log")
+set("log.file.path","/tmp/StationManager2_test.log")
 
 %include "passwords.liq"
+
+# Write tracklog
+def logtrack(metadata) =
+  ignore(
+    file.write(
+      data="#{metadata[\"artist\"]} - #{metadata[\"album\"]} - #{metadata[\"title\"]}\n",
+      append=true,
+      "playlist_test.txt"
+    )
+  )
+end
+
 
 # Music (shuffle mode is default)
 pl_afterparty = playlist("~/Radio Station/Music/Afterparty/")
@@ -51,10 +63,12 @@ radio = mksafe(
 # security = single("~/radio/sounds/default.ogg")
 # radio = fallback(track_sensitive = false, [radio, security])
 
+radio = on_metadata(logtrack,radio)
+
 # Stream it out
 output.icecast(%mp3(bitrate=192),
   host = "localhost", port = 8868,
-  password = icecastpassword, mount = "test.mp3",
+  password = icecastpassword, mount = "new.mp3",
   name = "Y2MATTK Radio",
   description = "An eclectic mix of Electronic and Hip-Hop tracks all day",
   genre = "Electronic & Hip-Hop",

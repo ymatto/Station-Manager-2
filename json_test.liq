@@ -4,14 +4,21 @@ set("log.file.path","/tmp/json_test.log")
 
 %include "passwords.liq"
 
-config_file = file.contents("StationManager2_config.json")
+# config_file = file.contents("showconfig.json")
 
-# log(config_file)
+# station_config = of_json(default=[("error", [("no show", "found")])], config_file)
 
-station_config = of_json(default=[("error", [("no show", "found")])], config_file)
+# this_show = station_config["Bump"]
 
-log(string_of(station_config))
+# log(this_show["DJ_voice"])
 
+# testvar = [("key1", [("subkey1", "value1")]), ("key2", [("subkey2", "value2")])]
+# testsubvar = testvar["key1"]["subkey1"]
+
+testvar = [("key1", "value1"), ("key2", "value2")]
+result = testvar["key1"]
+
+log (result)
 
 radio = blank()
 

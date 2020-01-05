@@ -1,18 +1,19 @@
 #!/Users/omm/.opam/default/bin/liquidsoap -v
 # Log dir
-set("log.file.path","/tmp/tracklog_test.log")
+set("log.file.path","/tmp/SM2_test.log")
 
+# sets variable: icecastpassword
 %include "passwords.liq"
 
 currentshow = ref ""
 
-# Write tracklog
+# Write stuff whenever there's a new track
 def logtrack(metadata) =
   ignore(
     file.write(
       data="#{metadata[\"artist\"]} - #{metadata[\"album\"]} - #{metadata[\"title\"]}\n",
       append=true,
-      "/Users/omm/Radio Station/recentTracks_test.log"
+      "recentTracks_test.log"
     )
   )
   newshow = "#{metadata[\"source\"]}"
@@ -23,7 +24,7 @@ def logtrack(metadata) =
       file.write(
         data=newshow,
         append=false,
-        "/Users/omm/Radio Station/currentShow_test.log"
+        "currentShow_test.log"
       )
     )
   end
@@ -45,7 +46,7 @@ radio = mksafe(
         )
 
 
-radio = on_metadata(logtrack, radio)
+radio = on_metadata(logtrack,radio)
 
 # Stream it out
 output.icecast(%mp3(bitrate=192),

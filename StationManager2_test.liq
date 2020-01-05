@@ -7,13 +7,13 @@ set("log.file.path","/tmp/StationManager2_test.log")
 
 currentshow = ref ""
 
-# Write tracklog
+# Write stuff whenever there's a new track
 def logtrack(metadata) =
   ignore(
     file.write(
       data="#{metadata[\"artist\"]} - #{metadata[\"album\"]} - #{metadata[\"title\"]}\n",
       append=true,
-      "/Users/omm/Radio Station/recentTracks_test.log"
+      "recentTracks.log"
     )
   )
   newshow = "#{metadata[\"source\"]}"
@@ -24,7 +24,7 @@ def logtrack(metadata) =
       file.write(
         data=newshow,
         append=false,
-        "/Users/omm/Radio Station/currentShow_test.log"
+        "currentShow.log"
       )
     )
   end
@@ -32,13 +32,13 @@ end
 
 
 # Music (shuffle mode is default)
-pl_afterparty = playlist(id="afterparty", "/Users/omm/Radio Station/Music/Afterparty/")
-pl_braindance = playlist(id="braindance", "/Users/omm/Radio Station/Music/Braindance/")
-pl_bump = playlist(id="bump", "/Users/omm/Radio Station/Music/Bump in the Trunk/")
-pl_beats = playlist(id="beats", "/Users/omm/Radio Station/Music/Instrumental Hip-Hop/")
-pl_headnod = playlist(id="headnod", "/Users/omm/Radio Station/Music/Laid Back Hip-Hop/")
-pl_nightmode = playlist(id="nightmode", "/Users/omm/Radio Station/Music/Late Night Electronic/")
-pl_groovestyle = playlist(id="groovestyle", "/Users/omm/Radio Station/Music/Stylish Background/")
+pl_afterparty = playlist(id="afterparty", "/Users/omm/Radio Station/Music/Afterparty")
+pl_braindance = playlist(id="braindance", "/Users/omm/Radio Station/Music/Braindance")
+pl_bump = playlist(id="bump", "/Users/omm/Radio Station/Music/Bump in the Trunk")
+pl_beats = playlist(id="beats", "/Users/omm/Radio Station/Music/Instrumental Hip-Hop")
+pl_headnod = playlist(id="headnod", "/Users/omm/Radio Station/Music/Laid Back Hip-Hop")
+pl_nightmode = playlist(id="nightmode", "/Users/omm/Radio Station/Music/Late Night Electronic")
+pl_groovestyle = playlist(id="groovestyle", "/Users/omm/Radio Station/Music/Stylish Background")
 
 radio = mksafe(
           crossfade(

@@ -1,35 +1,41 @@
 #!/Users/omm/.opam/default/bin/liquidsoap -v
-# Log dir
-set("log.file.path","/tmp/StationManager2_test.log")
 
-# sets variable: icecastpassword
-%include "passwords.liq"
+%include "passwords.liq"  # sets variable: icecastpassword
 
-currentshow = ref ""
 
-# Write stuff whenever there's a new track
-def logtrack(metadata) =
-  ignore(
-    file.write(
-      data="#{metadata[\"artist\"]} - #{metadata[\"album\"]} - #{metadata[\"title\"]}\n",
-      append=true,
-      "recentTracks.log"
-    )
-  )
-  newshow = "#{metadata[\"source\"]}"
-  oldshow = !currentshow
-  if newshow != oldshow then
-    currentshow := newshow
-    ignore(
-      file.write(
-        data=newshow,
-        append=false,
-        "currentShow.log"
-      )
-    )
-  end
+# LOAD STATION CONFIG
+config_file = file.contents("stationconfig.json")
+
+# TODO: allow multiple configs for multiple streams
+station_config_strings = of_json(default=[("error", "no station config")], config_file)
+station_config_ints = of_json(default=[("", 0)], config_file)
+
+if station_config_strings["error"] == "no station config" then
+  log("station config invalid")
 end
 
+# TODO: These should probably all use list.assoc to have specified defaults
+station_name = station_config_strings["name"]
+station_description = station_config_strings["description"]
+# station_spoken_ID = station_config_strings["spoken_ID"]
+station_log_path = station_config_strings["log_path"]
+station_tracklog_path = station_config_strings["tracklog_path"]
+station_currentshow_path = station_config_strings["currentshow_path"]
+# station_output_encoding = station_config_strings["currentshow_encoding"]
+# station_output_bitrate = list.assoc(default=192, "bitrate", station_config_ints)
+# station_format = # ... TODO: er, has to be weird "format" type
+station_host = station_config_strings["host"]
+station_port = list.assoc(default=8000, "port", station_config_ints)
+station_mount = station_config_strings["mount"]
+station_genre = station_config_strings["genre"]
+station_url = station_config_strings["url"]
+
+# Log dir
+set("log.file.path",station_log_path)
+
+
+
+# LOAD SHOWS AND SCHEDULE
 
 # Music (shuffle mode is default)
 pl_afterparty = playlist(id="afterparty", "/Users/omm/Radio Station/Music/Afterparty")
@@ -70,6 +76,36 @@ radio = mksafe(
         )
 
 
+# FUNCTION defs
+
+currentshow = ref ""
+
+# Write stuff whenever there's a new track
+def logtrack(metadata) =
+  ignore(
+    file.write(
+      data="#{metadata[\"artist\"]} - #{metadata[\"album\"]} - #{metadata[\"title\"]}\n",
+      append=true,
+      station_tracklog_path
+    )
+  )
+  newshow = "#{metadata[\"source\"]}"
+  oldshow = !currentshow
+  if newshow != oldshow then
+    currentshow := newshow
+    ignore(
+      file.write(
+        data=newshow,
+        append=false,
+        station_currentshow_path
+      )
+    )
+  end
+end
+
+
+# BUILD THE OUTPUT SOURCE
+
 # Add some jingles
 # radio = random(weights = [1, 4],[jingles, radio])
 
@@ -82,10 +118,10 @@ radio = on_metadata(logtrack,radio)
 
 # Stream it out
 output.icecast(%mp3(bitrate=192),
-  host = "localhost", port = 8868,
-  password = icecastpassword, mount = "new.mp3",
-  name = "Y2MATTK Radio",
-  description = "An eclectic mix of Electronic and Hip-Hop tracks all day",
-  genre = "Electronic & Hip-Hop",
-  url = "http://y2mattk.kicks-ass.net:8868/",
+  host = station_host, port = station_port,
+  password = icecastpassword, mount = station_mount,
+  name = station_name,
+  description = station_description,
+  genre = station_genre,
+  url = station_url,
   radio)

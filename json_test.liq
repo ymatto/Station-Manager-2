@@ -2,7 +2,6 @@
 # Log dir
 set("log.file.path","/tmp/json_test.log")
 
-%include "passwords.liq"
 
 # config_file = file.contents("showconfig.json")
 
@@ -13,18 +12,11 @@ set("log.file.path","/tmp/json_test.log")
 # log(this_show["DJ_voice"])
 
 
-testvar = [("key1", [("subkey1", "value1")]), ("key2", [("subkey2", "value2")])]
-subtestvar = list.assoc("key1", testvar)
+# testvar = [("key1", [("subkey1", "value1")]), ("key2", [("subkey2", "value2")])]
+# subtestvar = list.assoc("key1", testvar)
 
-log (string_of(subtestvar))
+# log (string_of(subtestvar))
 
 radio = blank()
 
-output.icecast(%mp3(bitrate=192),
-  host = "localhost", port = 8868,
-  password = icecastpassword, mount = "test.mp3",
-  name = "TEST RADIO",
-  description = "Testing something out",
-  genre = "TEST",
-  url = "",
-  radio)
+output.dummy(radio)

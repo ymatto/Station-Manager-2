@@ -2,8 +2,7 @@
 # Log dir
 set("log.file.path","/tmp/SM2_test.log")
 
-# sets variable: icecastpassword
-%include "passwords.liq"
+%include "passwords.liq" # sets variable: icecastpassword
 
 currentshow = ref ""
 

@@ -12,10 +12,14 @@ set("log.file.path","/tmp/json_test.log")
 # log(this_show["DJ_voice"])
 
 
-# testvar = [("key1", [("subkey1", "value1")]), ("key2", [("subkey2", "value2")])]
-# subtestvar = list.assoc("key1", testvar)
+testvar = [
+  ( "key1", [("subkey1", "value1"), ("subkey2", "value2")] ),
+  ( "key2", [("dumbkey", "dumbval")] )
+  ]
 
-# log (string_of(subtestvar))
+subtestvar = list.assoc(default=[("error", "no value")], "key1", testvar)
+
+log (subtestvar["subkey2"])
 
 radio = blank()
 

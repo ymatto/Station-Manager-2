@@ -36,7 +36,7 @@ set("log.file.path",station_log_path)
 
 
 # LOAD SHOWS AND SCHEDULE
-# Todo: If no file configured, should be smart enough to just pull list of
+# TODO: If no file configured, should be smart enough to just pull list of
 #       directories from station_playlists_path and use default settings
 
 
@@ -79,6 +79,8 @@ radio = mksafe(
         )
 
 
+
+
 # FUNCTION defs
 
 currentshow = ref ""
@@ -105,6 +107,8 @@ def logtrack(metadata) =
     )
   end
 end
+
+
 
 
 # BUILD THE OUTPUT SOURCE

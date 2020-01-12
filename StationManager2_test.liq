@@ -4,9 +4,8 @@
 
 
 # LOAD STATION CONFIG
+# TODO: allow multiple configs within the config file for multiple output streams of the same station
 config_file = file.contents("stationconfig.json")
-
-# TODO: allow multiple configs for multiple streams
 station_config_strings = of_json(default=[("error", "no station config")], config_file)
 station_config_ints = of_json(default=[("", 0)], config_file)
 
@@ -29,6 +28,7 @@ station_port = list.assoc(default=8000, "port", station_config_ints)
 station_mount = station_config_strings["mount"]
 station_genre = station_config_strings["genre"]
 station_url = station_config_strings["url"]
+# station_playlists_root = station_config_strings["playlists_root"]
 
 # Log dir
 set("log.file.path",station_log_path)
@@ -36,6 +36,9 @@ set("log.file.path",station_log_path)
 
 
 # LOAD SHOWS AND SCHEDULE
+# Todo: If no file configured, should be smart enough to just pull list of
+#       directories from station_playlists_path and use default settings
+
 
 # Music (shuffle mode is default)
 pl_afterparty = playlist(id="afterparty", "/Users/omm/Radio Station/Music/Afterparty")

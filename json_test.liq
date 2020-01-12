@@ -3,23 +3,23 @@
 set("log.file.path","/tmp/json_test.log")
 
 
-# config_file = file.contents("showconfig.json")
+#simulated output from config file
+station_playlists_root = "/Users/omm/Radio Station/Music/"
 
-# station_config = of_json(default=[("error", [("no show", "found")])], config_file)
+config_file = file.contents("showconfig.json")
+showconfig = of_json(default=[("error", [("no show found", "")])], config_file)
 
-# this_show = station_config["Bump"]
+def get_show((showkey,showdata)) =
 
-# log(this_show["DJ_voice"])
+end
+
+if list.mem_assoc("error", showconfig) == false then
+  list.iter(get_show, showconfig)
+end
 
 
-testvar = [
-  ( "key1", [("subkey1", "value1"), ("subkey2", "value2")] ),
-  ( "key2", [("dumbkey", "dumbval")] )
-  ]
 
-subtestvar = list.assoc(default=[("error", "no value")], "key1", testvar)
-
-log (subtestvar["subkey2"])
+log ("okay")
 
 radio = blank()
 

@@ -2,13 +2,15 @@
 # Log dir
 set("log.file.path","/tmp/quick_test_blank.log")
 
-
-thing = ref []
-
-thing := list.append([("key","value")], !thing)
+thing = "yo"
 
 
-log (list.assoc(default="error", "key", !thing))
+if (thing == "yo") then
+  thing = "not yo"
+  log(thing)
+end
+
+log (thing)
 
 # Generic make-it-run crap
 radio = blank()

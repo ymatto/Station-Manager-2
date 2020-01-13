@@ -110,13 +110,27 @@ radio = mksafe(
 # UPDATE LOG DATA ON NEW TRACK
 
 currentshow = ref ""
+recenttracks = ref []
+new_tracklog = ref ""
 
 # Write stuff whenever there's a new track
+
+def addtotracklog(nexttrack) =
+  new_tracklog := string.concat([!new_tracklog, nexttrack, "\n"])
+end
+
 def logtrack(metadata) =
+  newline="#{metadata[\"artist\"]} - #{metadata[\"album\"]} - #{metadata[\"title\"]}"
+  recenttracks := list.add(newline, !recenttracks)
+  if (list.length(!recenttracks) > 20) then
+    recenttracks := list.rev(list.tl(list.rev(!recenttracks)))
+  end
+  new_tracklog := ""
+  list.iter(addtotracklog, !recenttracks)
   ignore(
     file.write(
-      data="#{metadata[\"artist\"]} - #{metadata[\"album\"]} - #{metadata[\"title\"]}\n",
-      append=true,
+      data=!new_tracklog,
+      append=false,
       station_tracklog_path
     )
   )

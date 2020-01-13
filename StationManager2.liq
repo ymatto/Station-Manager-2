@@ -5,9 +5,9 @@
 
 # LOAD STATION CONFIG
 # TODO: allow multiple configs within the config file for multiple output streams of the same station
-config_file = file.contents("stationconfig.json")
-station_config_strings = of_json(default=[("error", "no station config")], config_file)
-station_config_ints = of_json(default=[("", 0)], config_file)
+stationconfig_file = file.contents("stationconfig.json") # CHANGEME TO TEST
+station_config_strings = of_json(default=[("error", "no station config")], stationconfig_file)
+station_config_ints = of_json(default=[("", 0)], stationconfig_file)
 
 if station_config_strings["error"] == "no station config" then
   log("station config invalid")
@@ -28,7 +28,8 @@ station_port = list.assoc(default=8000, "port", station_config_ints)
 station_mount = station_config_strings["mount"]
 station_genre = station_config_strings["genre"]
 station_url = station_config_strings["url"]
-# station_playlists_root = station_config_strings["playlists_root"]
+station_playlists_root = ref station_config_strings["playlists_root"] # FIX: better way than using ref?
+station_showconfig_path = station_config_strings["showconfig_path"]
 
 # Log dir
 set("log.file.path",station_log_path)
@@ -39,14 +40,18 @@ set("log.file.path",station_log_path)
 # TODO: Probably build other lists other than show_names here at some point.
 # TODO: Deal with failure to read better with thoughtful defaults and handling
 
+show_paths = ref []
 show_names = ref []
 
-config_file = file.contents("showconfig.json") # TODO: Add on stationconfig
-showconfig = of_json(default=[("error", [("no show found", "")])], config_file)
+showconfig_file = file.contents(station_showconfig_path)
+showconfig = of_json(default=[("error", [("no show found", "")])], showconfig_file)
 
 def get_show(thisshow) =
   thisshowkey = fst(thisshow)
   thisshowdata = snd(thisshow)
+  thisshowpath = list.assoc (default="error", "playlist_path", thisshowdata) # TODO: deal with failure better
+  show_paths := list.append([(thisshowkey, "#{!station_playlists_root}#{thisshowpath}")], !show_paths)
+
   thisshowname = list.assoc (default="error", "show_name", thisshowdata)
   show_names := list.append([(thisshowkey, thisshowname)], !show_names)
 end
@@ -59,55 +64,7 @@ end
 
 
 
-# LOAD SHOW SCHEDULE
-# TODO: Figure out how to pull in showschedule to do this dynamically.
-#       Hard-coding a match to the existing schedule for now.
-# TODO: If no file configured, should be smart enough to just pull list of
-#       directories from station_playlists_path and use default settings
-
-
-# Music (shuffle mode is default)
-pl_afterparty = playlist(id="Afterparty", "/Users/omm/Radio Station/Music/Afterparty")
-pl_braindance = playlist(id="Braindance", "/Users/omm/Radio Station/Music/Braindance")
-pl_bump = playlist(id="Bump", "/Users/omm/Radio Station/Music/Bump in the Trunk")
-pl_beats = playlist(id="Beats", "/Users/omm/Radio Station/Music/Instrumental Hip-Hop")
-pl_headnod = playlist(id="Headnod", "/Users/omm/Radio Station/Music/Laid Back Hip-Hop")
-pl_nightmode = playlist(id="Nightmode", "/Users/omm/Radio Station/Music/Late Night Electronic")
-pl_groovestyle = playlist(id="Groovestyle", "/Users/omm/Radio Station/Music/Stylish Background")
-
-radio = mksafe(
-          crossfade(
-            switch(
-              [
-                ({ 0w and 0h-7h }, pl_afterparty),
-                ({ 0w and 7h-20h }, pl_groovestyle),
-                ({ 0w and 20h-24h }, pl_nightmode),
-                ({ (1w or 3w) and 0h-7h }, pl_afterparty),
-                ({ (1w or 3w) and 7h-10h }, pl_groovestyle),
-                ({ (1w or 3w) and 10h-20h }, pl_braindance),
-                ({ (1w or 3w) and 20h-24h }, pl_nightmode),
-                ({ (2w or 4w) and 0h-7h }, pl_beats),
-                ({ (2w or 4w) and 7h-11h }, pl_headnod),
-                ({ (2w or 4w) and 11h-16h }, pl_bump),
-                ({ (2w or 4w) and 16h-22h }, pl_headnod),
-                ({ (2w or 4w) and 22h-24h }, pl_beats),
-                ({ 5w and 0h-4h }, pl_afterparty),
-                ({ 5w and 4h-10h }, pl_groovestyle),
-                ({ 5w and 10h-20h }, pl_braindance),
-                ({ 5w and 20h-24h }, pl_afterparty),
-                ({ 6w and 0h-7h }, pl_afterparty),
-                ({ 6w and 7h-12h }, pl_groovestyle),
-                ({ 6w and 12h-20h }, pl_braindance),
-                ({ 6w and 20h-24h }, pl_nightmode)
-              ]
-            )
-          )
-        )
-
-
-
-
-# UPDATE LOG DATA ON NEW TRACK
+# FUNCTIONS TO UPDATE LOG DATA ON NEW TRACK
 
 currentshow = ref ""
 recenttracks = ref []
@@ -151,6 +108,21 @@ end
 
 
 
+
+
+
+# LOAD SHOW SCHEDULE
+# TODO: Figure out how to pull in showschedule to do this dynamically.
+#       Hard-coding a match to the existing schedule for now.
+# TODO: If no file configured, should be smart enough to just pull list of
+#       directories from station_playlists_path and use default settings
+
+%include "y2mattk_schedule.liq" # CHANGEME TO TEST
+
+
+
+
+
 # BUILD THE OUTPUT SOURCE
 
 # Add some jingles
@@ -163,7 +135,7 @@ end
 
 radio = on_metadata(logtrack,radio)
 
-# Stream it out
+# CREATE THE STREAM
 output.icecast(%mp3(bitrate=192),
   host = station_host, port = station_port,
   password = icecastpassword, mount = station_mount,

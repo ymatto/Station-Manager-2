@@ -6,3 +6,4 @@ icecast.xml
 tracklog_test.liq
 *.log
 quick_test_blank.liq
+quick_test.liq

@@ -22,7 +22,7 @@ station_tracklog_path = station_config_strings["tracklog_path"]
 station_currentshow_path = station_config_strings["currentshow_path"]
 # station_output_encoding = station_config_strings["currentshow_encoding"]
 # station_output_bitrate = list.assoc(default=192, "bitrate", station_config_ints)
-# station_format = # ... TODO: er, has to be weird "format" type
+# station_format = # ... TODO: Have defined list of "formats" to specify from
 station_host = station_config_strings["host"]
 station_port = list.assoc(default=8000, "port", station_config_ints)
 station_mount = station_config_strings["mount"]
@@ -34,20 +34,46 @@ station_url = station_config_strings["url"]
 set("log.file.path",station_log_path)
 
 
+# LOAD SHOW config
+# TODO: For now just pulling a list of names for the sake of the currentShow.log
+# TODO: Probably build other lists other than show_names here at some point.
+# TODO: Deal with failure to read better with thoughtful defaults and handling
 
-# LOAD SHOWS AND SCHEDULE
+show_names = ref []
+
+config_file = file.contents("showconfig.json") # TODO: Add on stationconfig
+showconfig = of_json(default=[("error", [("no show found", "")])], config_file)
+
+def get_show(thisshow) =
+  thisshowkey = fst(thisshow)
+  thisshowdata = snd(thisshow)
+  thisshowname = list.assoc (default="error", "show_name", thisshowdata)
+  show_names := list.append([(thisshowkey, thisshowname)], !show_names)
+end
+
+if list.mem_assoc("error", showconfig) == false then
+  list.iter(get_show, showconfig)
+end
+
+
+
+
+
+# LOAD SHOW SCHEDULE
+# TODO: Figure out how to pull in showschedule to do this dynamically.
+#       Hard-coding a match to the existing schedule for now.
 # TODO: If no file configured, should be smart enough to just pull list of
 #       directories from station_playlists_path and use default settings
 
 
 # Music (shuffle mode is default)
-pl_afterparty = playlist(id="afterparty", "/Users/omm/Radio Station/Music/Afterparty")
-pl_braindance = playlist(id="braindance", "/Users/omm/Radio Station/Music/Braindance")
-pl_bump = playlist(id="bump", "/Users/omm/Radio Station/Music/Bump in the Trunk")
-pl_beats = playlist(id="beats", "/Users/omm/Radio Station/Music/Instrumental Hip-Hop")
-pl_headnod = playlist(id="headnod", "/Users/omm/Radio Station/Music/Laid Back Hip-Hop")
-pl_nightmode = playlist(id="nightmode", "/Users/omm/Radio Station/Music/Late Night Electronic")
-pl_groovestyle = playlist(id="groovestyle", "/Users/omm/Radio Station/Music/Stylish Background")
+pl_afterparty = playlist(id="Afterparty", "/Users/omm/Radio Station/Music/Afterparty")
+pl_braindance = playlist(id="Braindance", "/Users/omm/Radio Station/Music/Braindance")
+pl_bump = playlist(id="Bump", "/Users/omm/Radio Station/Music/Bump in the Trunk")
+pl_beats = playlist(id="Beats", "/Users/omm/Radio Station/Music/Instrumental Hip-Hop")
+pl_headnod = playlist(id="Headnod", "/Users/omm/Radio Station/Music/Laid Back Hip-Hop")
+pl_nightmode = playlist(id="Nightmode", "/Users/omm/Radio Station/Music/Late Night Electronic")
+pl_groovestyle = playlist(id="Groovestyle", "/Users/omm/Radio Station/Music/Stylish Background")
 
 radio = mksafe(
           crossfade(
@@ -81,7 +107,7 @@ radio = mksafe(
 
 
 
-# FUNCTION defs
+# UPDATE LOG DATA ON NEW TRACK
 
 currentshow = ref ""
 
@@ -100,7 +126,7 @@ def logtrack(metadata) =
     currentshow := newshow
     ignore(
       file.write(
-        data=newshow,
+        data=list.assoc(default="", newshow, !show_names),
         append=false,
         station_currentshow_path
       )

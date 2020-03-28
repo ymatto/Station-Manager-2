@@ -117,7 +117,7 @@ end
 # TODO: If no file configured, should be smart enough to just pull list of
 #       directories from station_playlists_path and use default settings
 
-%include "y2mattk_schedule.liq" # CHANGEME TO TEST
+%include "bassdrive_schedule.liq" # CHANGEME TO TEST
 
 
 

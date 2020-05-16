@@ -5,7 +5,7 @@
 
 # LOAD STATION CONFIG
 # TODO: allow multiple configs within the config file for multiple output streams of the same station
-stationconfig_file = file.contents("stationconfig.json") # CHANGEME TO TEST
+stationconfig_file = file.contents("stationconfig_shortiez.json") # CHANGEME TO TEST
 station_config_strings = of_json(default=[("error", "no station config")], stationconfig_file)
 station_config_ints = of_json(default=[("", 0)], stationconfig_file)
 
@@ -117,7 +117,7 @@ end
 # TODO: If no file configured, should be smart enough to just pull list of
 #       directories from station_playlists_path and use default settings
 
-%include "bassdrive_schedule.liq" # CHANGEME TO TEST
+%include "shortiez_schedule.liq" # CHANGEME TO TEST
 
 
 
@@ -125,15 +125,20 @@ end
 
 # BUILD THE OUTPUT SOURCE
 
-# Add some jingles
-# radio = random(weights = [1, 4],[jingles, radio])
-
-# Add fallback security
-# If something goes wrong, we'll play this
-# security = single("~/radio/sounds/default.ogg")
-# radio = fallback(track_sensitive = false, [radio, security])
-
 radio = on_metadata(logtrack,radio)
+
+set("harbor.bind_addr","0.0.0.0")
+harborsource = input.harbor("test-harbor", port=8033, password="xxx")
+
+hout = output.icecast(%wav,
+  port = 8033,
+  host = "0.0.0.0",
+  mount = "test-harbor",
+  password = "xxx")
+
+hout(radio)
+
+outputsource = mksafe(harborsource)
 
 # CREATE THE STREAM
 output.icecast(%mp3(bitrate=192),
@@ -143,4 +148,9 @@ output.icecast(%mp3(bitrate=192),
   description = station_description,
   genre = station_genre,
   url = station_url,
-  radio)
+  outputsource)
+
+source.shutdown (radio)
+radio = mksafe(playlist("/Users/omm/Radio Station/MusicTest/Afterparty"))
+
+hout(radio)

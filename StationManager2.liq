@@ -149,8 +149,3 @@ output.icecast(%mp3(bitrate=192),
   genre = station_genre,
   url = station_url,
   outputsource)
-
-source.shutdown (radio)
-radio = mksafe(playlist("/Users/omm/Radio Station/MusicTest/Afterparty"))
-
-hout(radio)

@@ -66,7 +66,7 @@ end
 
 # FUNCTIONS TO UPDATE LOG DATA ON NEW TRACK
 
-currentshow = ref ""
+currentshow_name = ref ""
 recenttracks = ref []
 new_tracklog = ref ""
 
@@ -92,9 +92,9 @@ def logtrack(metadata) =
     )
   )
   newshow = "#{metadata[\"source\"]}"
-  oldshow = !currentshow
+  oldshow = !currentshow_name
   if newshow != oldshow then
-    currentshow := newshow
+    currentshow_name := newshow
     ignore(
       file.write(
         data=list.assoc(default="", newshow, !show_names),
@@ -125,6 +125,9 @@ end
 
 # BUILD THE HARBOR SOURCE FOR SCHEDULED SHOW SWITCHING
 
+currentshow_source = ref []
+default_pulse = ref 10.0
+
 set("harbor.bind_addr","0.0.0.0")
 scheduled_source = input.harbor("broadcast-harbor", port=8033, password="ncr89nqenfihs997hfxa")
 
@@ -134,9 +137,19 @@ hout = output.icecast(%wav,
   mount = "broadcast-harbor",
   password = "ncr89nqenfihs997hfxa")
 
-hout(radio)  # switchy logic replaces this
+def changeshow (show) =
+  s = hout(show)
+  currentshow_source := [s]
+end
 
+def looper () =
+  # list.iter(source.shutdown, !currentshow_source)
+  !default_pulse
+end
 
+changeshow(radio) # move inside looper logic and maybe source.shutdown can be in changeshow
+
+add_timeout(!default_pulse, looper)
 
 
 # BUILD THE BROADCAST SOURCE

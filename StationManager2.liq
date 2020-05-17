@@ -123,22 +123,25 @@ end
 
 
 
-# BUILD THE OUTPUT SOURCE
-
-radio = on_metadata(logtrack,radio)
+# BUILD THE HARBOR SOURCE FOR SCHEDULED SHOW SWITCHING
 
 set("harbor.bind_addr","0.0.0.0")
-harborsource = input.harbor("test-harbor", port=8033, password="xxx")
+scheduled_source = input.harbor("broadcast-harbor", port=8033, password="ncr89nqenfihs997hfxa")
 
 hout = output.icecast(%wav,
   port = 8033,
   host = "0.0.0.0",
-  mount = "test-harbor",
-  password = "xxx")
+  mount = "broadcast-harbor",
+  password = "ncr89nqenfihs997hfxa")
 
-hout(radio)
+hout(radio)  # switchy logic replaces this
 
-outputsource = mksafe(harborsource)
+
+
+
+# BUILD THE BROADCAST SOURCE
+
+broadcast_source = mksafe(on_metadata(logtrack, scheduled_source))
 
 # CREATE THE STREAM
 output.icecast(%mp3(bitrate=192),
@@ -147,5 +150,4 @@ output.icecast(%mp3(bitrate=192),
   name = station_name,
   description = station_description,
   genre = station_genre,
-  url = station_url,
-  outputsource)
+  url = station_url, broadcast_source)

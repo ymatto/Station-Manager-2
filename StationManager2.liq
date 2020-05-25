@@ -72,7 +72,7 @@ list.iter(get_show, showconfig)
 #       directories from station_playlists_path and use default settings
 # TODO: Deal with failure-to-read better with thoughtful defaults and handling
 
-%include "basscadet_schedule.liq" # CHANGEME TO TEST
+# %include "basscadet_schedule.liq" # DELETE...
 
 showschedule_types = ref [] # "daysofweek", "everyday", ...
 showschedule_days = ref [] # ["Mondays", "Wednesdays"], [""], ...
@@ -116,15 +116,25 @@ list.iter(get_showschedule_stringlists, showschedule_stringlist_pairs)
 list.iter(get_showschedule_intlists, showschedule_intlist_pairs)
 
 
-# TODO: Initialize todays_schedule...
+# FUNCTIONS TO INITIALIZE SHOW SCHEDULE FOR TODAY
+
+todays_show_names = ref [] # list o' show names
+todays_show_times = ref [] # corresponding list o' show times when they should start
+
+def set_todays_schedule() =
+    # FIXME: temp shit to work out looper logic before figuring this out
+    todays_show_names := ["Braindance", "Beats"]
+    todays_show_times := [0, 13]
+end
+
 
 
 
 
 # FUNCTIONS TO UPDATE LOG DATA ON NEW TRACK
 
-currentshow_name = ref ""
-recenttracks = ref []
+currentshow_logname = ref ""
+recent_tracks = ref []
 new_tracklog = ref ""
 
 # Write stuff whenever there's a new track
@@ -135,12 +145,12 @@ end
 
 def logtrack(metadata) =
   newline="#{metadata[\"artist\"]} - #{metadata[\"album\"]} - #{metadata[\"title\"]}"
-  recenttracks := list.add(newline, !recenttracks)
-  if (list.length(!recenttracks) > 20) then
-    recenttracks := list.rev(list.tl(list.rev(!recenttracks)))
+  recent_tracks := list.add(newline, !recent_tracks)
+  if (list.length(!recent_tracks) > 20) then
+    recent_tracks := list.rev(list.tl(list.rev(!recent_tracks)))
   end
   new_tracklog := ""
-  list.iter(addtotracklog, !recenttracks)
+  list.iter(addtotracklog, !recent_tracks)
   ignore(
     file.write(
       data=!new_tracklog,
@@ -149,9 +159,9 @@ def logtrack(metadata) =
     )
   )
   newshow = "#{metadata[\"source\"]}"
-  oldshow = !currentshow_name
+  oldshow = !currentshow_logname
   if newshow != oldshow then
-    currentshow_name := newshow
+    currentshow_logname := newshow
     ignore(
       file.write(
         data=list.assoc(default="", newshow, !show_names),
@@ -168,43 +178,85 @@ end
 
 # BUILD THE HARBOR SOURCE FOR SCHEDULED SHOW SWITCHING
 
-currentshow_source = ref []
-default_pulse = ref 10.0 # seconds between loops if there's no other need
-
 set("harbor.bind_addr","0.0.0.0")
 scheduled_source = input.harbor("broadcast-harbor", port=8033, password="ncr89nqenfihs997hfxa")
 
 hout = output.icecast(%wav,
-  port = 8033,
-  host = "0.0.0.0",
-  mount = "broadcast-harbor",
-  password = "ncr89nqenfihs997hfxa") #TODO: randomly generate password for this?
+      port = 8033,
+      host = "0.0.0.0",
+      mount = "broadcast-harbor",
+      password = "ncr89nqenfihs997hfxa") #TODO: randomly generate password for this?
 
-def changeshow (show) =
-  s = hout(show)
-  currentshow_source := [s]
+
+
+# SET UP AUTOMATED HARBOR SOURCE CONTROL VIA SCHEDULE
+
+current_show_name = ref ""
+current_show_source = ref []
+
+default_pulse = ref 10.0 # seconds between loops if there's no other need
+current_day = ref ""
+
+# time crap
+
+def get_weekday_name(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
+    daymapping = [
+        (0, "Sunday"),
+        (1, "Monday"),
+        (2, "Tuesday"),
+        (3, "Wednesday"),
+        (4, "Thursday"),
+        (5, "Friday"),
+        (6, "Saturday")
+    ]
+    list.assoc(default="error", wday, daymapping)
 end
 
-
-
-def looper () =
-
-  # list.iter(source.shutdown, !currentshow_source)
-
-  !default_pulse
+def get_today() =
+    localtime(gettimeofday(), get_weekday_name)
 end
 
+# show control
+
+def changeshow (showname) =
+    show_source = mksafe(crossfade(playlist(id=showname, list.assoc(default="error", showname, !show_paths))))
+    s = hout(show_source)
+    current_show_source := [s]
+    current_show_name := showname
+end
+
+def get_correct_show() =
+    #FIXME
+    "Braindance"
+end
+
+def dj_looper () =
+    print("DJ Looper checking in...")
+    now_day = get_today()
+    if (!current_day != now_day) then
+        current_day := now_day
+        set_todays_schedule()
+    end
+    correct_show = get_correct_show()
+    if (!current_show_name != correct_show) then
+        print("Time for a new show!")
+        list.iter(source.shutdown, !current_show_source) # FIXME can this move into changeshow?
+        changeshow(correct_show)
+        current_show_name := correct_show
+    end
+
+  !default_pulse #FIXME needs to at least try to change shows at ends of tracks
+end
+
+add_timeout(5.0, dj_looper)
 
 
-changeshow(radio) # move inside looper logic and maybe source.shutdown can be in changeshow
-
-add_timeout(!default_pulse, looper)
 
 
 
 
 
-# BUILD THE BROADCAST SOURCE
+# BUILD THE BROADCAST OUTPUT
 
 broadcast_source = mksafe(on_metadata(logtrack, scheduled_source))
 

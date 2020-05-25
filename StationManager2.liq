@@ -3,9 +3,10 @@
 %include "passwords.liq"  # sets variable: icecastpassword
 
 
-# LOAD STATION CONFIG
+# LOAD STATIONCONFIG
+
 # TODO: allow multiple configs within the config file for multiple output streams of the same station
-stationconfig_file = file.contents("stationconfig_shortiez.json") # CHANGEME TO TEST
+stationconfig_file = file.contents("stationconfig.json") # CHANGEME TO TEST
 station_config_strings = of_json(default=[("error", "no station config")], stationconfig_file)
 station_config_ints = of_json(default=[("", 0)], stationconfig_file)
 
@@ -30,36 +31,92 @@ station_genre = station_config_strings["genre"]
 station_url = station_config_strings["url"]
 station_playlists_root = ref station_config_strings["playlists_root"] # FIX: better way than using ref?
 station_showconfig_path = station_config_strings["showconfig_path"]
+station_showschedule_path = station_config_strings["showschedule_path"]
 
 # Log dir
 set("log.file.path",station_log_path)
 
 
-# LOAD SHOW config
-# TODO: For now just pulling a list of names for the sake of the currentShow.log
-# TODO: Probably build other lists other than show_names here at some point.
-# TODO: Deal with failure to read better with thoughtful defaults and handling
 
-show_paths = ref []
-show_names = ref []
+
+# LOAD SHOWCONFIG
+
+# TODO: For now just pulling a list of names for the sake of the currentShow.log, need to parse the rest
+# TODO: Probably build other lists other than show_names/paths here at some point.
+# TODO: Deal with failure-to-read better with thoughtful defaults and handling
+
+show_paths = ref [] # ("Beats", "files/Instrumental Hip-Hop"), ("Groovestyle", "files/Stylish Background"), ...
+show_names = ref [] # ("Beats", "Straight Beats"), ("Groovestyle", "Groovestyle"), ...
 
 showconfig_file = file.contents(station_showconfig_path)
-showconfig = of_json(default=[("error", [("no show found", "")])], showconfig_file)
+showconfig = of_json(default=[ ( "error" , [("no show found", "")] ) ], showconfig_file)
 
 def get_show(thisshow) =
   thisshowkey = fst(thisshow)
   thisshowdata = snd(thisshow)
+
   thisshowpath = list.assoc (default="error", "playlist_path", thisshowdata) # TODO: deal with failure better
   show_paths := list.append([(thisshowkey, "#{!station_playlists_root}#{thisshowpath}")], !show_paths)
-
-  thisshowname = list.assoc (default="error", "show_name", thisshowdata)
+  thisshowname = list.assoc (default="error", "show_name", thisshowdata) # TODO: deal with failure better
   show_names := list.append([(thisshowkey, thisshowname)], !show_names)
 end
 
-if list.mem_assoc("error", showconfig) == false then
-  list.iter(get_show, showconfig)
+list.iter(get_show, showconfig)
+
+
+
+
+# LOAD SHOW SCHEDULE
+
+# TODO: If no file configured, should be smart enough to just pull list of
+#       directories from station_playlists_path and use default settings
+# TODO: Deal with failure-to-read better with thoughtful defaults and handling
+
+%include "basscadet_schedule.liq" # CHANGEME TO TEST
+
+showschedule_types = ref [] # "daysofweek", "everyday", ...
+showschedule_days = ref [] # ["Mondays", "Wednesdays"], [""], ...
+showschedule_show_names = ref [] # ["Afterparty", "Groovestyle", "Nightmode"], ["Braindance", "Beats"], ...
+showschedule_show_times = ref [] # [0, 7, 16], [0, 12], ...
+
+showschedule_file = file.contents(station_showschedule_path)
+
+showschedule_string_pairs = of_json(                         # types
+    default=[ [ ("strings_error", "") ] ],
+    showschedule_file
+    )
+showschedule_stringlist_pairs = of_json(                    # days, show_names
+    default=[ [ ("stringarrays_error", [ "" ]) ] ],
+    showschedule_file
+    )
+showschedule_intlist_pairs = of_json(                       # show_times
+    default=[ [ ("intarrays_error", [ 0 ]) ] ],
+    showschedule_file
+    )
+
+def get_showschedule_strings(string_pairs) =
+    this_type = list.assoc (default="everyday", "type", string_pairs) # TODO: check default handling?
+    showschedule_types := list.append([this_type], !showschedule_types)
 end
 
+def get_showschedule_stringlists(stringlist_pairs) =
+    this_days = list.assoc (default=[""], "days", stringlist_pairs) # TODO: check default handling?
+    showschedule_days := list.append([this_days], !showschedule_days)
+    this_show_names = list.assoc (default=[""], "show_names", stringlist_pairs) # TODO: make a blank or something
+    showschedule_show_names := list.append([this_show_names], !showschedule_show_names)
+end
+
+def get_showschedule_intlists(intarray_pairs) =
+    this_show_times = list.assoc (default=[0], "show_times", intarray_pairs) # TODO: check default handling?
+    showschedule_show_times := list.append([this_show_times], !showschedule_show_times)
+end
+
+list.iter(get_showschedule_strings, showschedule_string_pairs)
+list.iter(get_showschedule_stringlists, showschedule_stringlist_pairs)
+list.iter(get_showschedule_intlists, showschedule_intlist_pairs)
+
+
+# TODO: Initialize todays_schedule...
 
 
 
@@ -109,24 +166,10 @@ end
 
 
 
-
-
-# LOAD SHOW SCHEDULE
-# TODO: Figure out how to pull in showschedule to do this dynamically.
-#       Hard-coding a match to the existing schedule for now.
-# TODO: If no file configured, should be smart enough to just pull list of
-#       directories from station_playlists_path and use default settings
-
-%include "shortiez_schedule.liq" # CHANGEME TO TEST
-
-
-
-
-
 # BUILD THE HARBOR SOURCE FOR SCHEDULED SHOW SWITCHING
 
 currentshow_source = ref []
-default_pulse = ref 10.0
+default_pulse = ref 10.0 # seconds between loops if there's no other need
 
 set("harbor.bind_addr","0.0.0.0")
 scheduled_source = input.harbor("broadcast-harbor", port=8033, password="ncr89nqenfihs997hfxa")
@@ -135,21 +178,30 @@ hout = output.icecast(%wav,
   port = 8033,
   host = "0.0.0.0",
   mount = "broadcast-harbor",
-  password = "ncr89nqenfihs997hfxa")
+  password = "ncr89nqenfihs997hfxa") #TODO: randomly generate password for this?
 
 def changeshow (show) =
   s = hout(show)
   currentshow_source := [s]
 end
 
+
+
 def looper () =
+
   # list.iter(source.shutdown, !currentshow_source)
+
   !default_pulse
 end
+
+
 
 changeshow(radio) # move inside looper logic and maybe source.shutdown can be in changeshow
 
 add_timeout(!default_pulse, looper)
+
+
+
 
 
 # BUILD THE BROADCAST SOURCE

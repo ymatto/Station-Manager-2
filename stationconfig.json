@@ -1,1 +1,18 @@
-{"description":"An electic mix of Electronic and Hip-Hop tracks","showconfig_path":"showconfig.json","tracklog_path":"recentTracks.log","genre":"Electronic & Hip-Hop","mount":"basscadettest.mp3","log_path":"/tmp/StationManager2_test.log","url":"http://basscadet.net:8000/","spoken_ID":"This is Bass Cadet.","output encoding":"mp3","host":"localhost","output_bitrate":192,"playlists_root":"/Users/omm/Radio Station/Music/","currentshow_path":"currentShow.log","name":"BASSCADETTEST","port":8000}
+{
+  "description": "An electic mix of Electronic and Hip-Hop tracks",
+  "showconfig_path": "showconfig.json",
+  "tracklog_path": "recentTracks.log",
+  "showschedule_path": "showschedule.json",
+  "genre": "Electronic & Hip-Hop",
+  "mount": "basscadettest.mp3",
+  "log_path": "/tmp/StationManager2_test.log",
+  "url": "http://basscadet.net:8000/",
+  "spoken_ID": "This is Bass Cadet.",
+  "output encoding": "mp3",
+  "host": "localhost",
+  "output_bitrate": 192,
+  "playlists_root": "/Users/omm/Radio Station/Music/",
+  "currentshow_path": "currentShow.log",
+  "name": "BASSCADETTEST",
+  "port": 8000
+}

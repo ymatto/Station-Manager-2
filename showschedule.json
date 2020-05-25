@@ -1,1 +1,94 @@
-{"Friday":[{"show":"Afterparty","start_time":0},{"show":"Groovestyle","start_time":4},{"show":"Braindance","start_time":10},{"show":"Afterparty","start_time":20}],"Monday":[{"show":"Afterparty","start_time":0},{"show":"Groovestyle","start_time":7},{"show":"Braindance","start_time":10},{"show":"Nightmode","start_time":20}],"Saturday":[{"show":"Afterparty","start_time":0},{"show":"Groovestyle","start_time":7},{"show":"Braindance","start_time":12},{"show":"Nightmode","start_time":20}],"Sunday":[{"show":"Afterparty","start_time":0},{"show":"Groovestyle","start_time":7},{"show":"Nightmode","start_time":20}],"Wednesday":[{"show":"Afterparty","start_time":0},{"show":"Groovestyle","start_time":7},{"show":"Braindance","start_time":10},{"show":"Nightmode","start_time":20}],"Tuesday":[{"show":"Beats","start_time":0},{"show":"Headnod","start_time":7},{"show":"Bump","start_time":11},{"show":"Headnod","start_time":16},{"show":"Beats","start_time":22}],"Thursday":[{"show":"Beats","start_time":0},{"show":"Headnod","start_time":7},{"show":"Bump","start_time":11},{"show":"Headnod","start_time":16},{"show":"Beats","start_time":22}]}
+[
+  {
+    "show_names": [
+      "Afterparty",
+      "Groovestyle",
+      "Nightmode"
+    ],
+    "days": [
+      "Sunday"
+    ],
+    "show_times": [
+      0,
+      7,
+      20
+    ],
+    "type": "daysofweek"
+  },
+  {
+    "show_names": [
+      "Afterparty",
+      "Groovestyle",
+      "Braindance",
+      "Nightmode"
+    ],
+    "days": [
+      "Mondays",
+      "Wednesdays"
+    ],
+    "show_times": [
+      0,
+      7,
+      10,
+      20
+    ],
+    "type": "daysofweek"
+  },
+  {
+    "shows_times": [
+      0,
+      7,
+      11,
+      16,
+      22
+    ],
+    "days": [
+      "Tuesdays",
+      "Thursdays"
+    ],
+    "show_names": [
+      "Beats",
+      "Headnod",
+      "Bump",
+      "Headnod",
+      "Beats"
+    ],
+    "type": "daysofweek"
+  },
+  {
+    "show_names": [
+      "Afterparty",
+      "Groovestyle",
+      "Braindance",
+      "Afterparty"
+    ],
+    "show_times": [
+      0,
+      4,
+      10,
+      20
+    ],
+    "days": [
+      "Friday"
+    ],
+    "type": "daysofweek"
+  },
+  {
+    "show_names": [
+      "Afterparty",
+      "Groovestyle",
+      "Braindance",
+      "Nightmode"
+    ],
+    "shows_times": [
+      0,
+      7,
+      12,
+      20
+    ],
+    "days": [
+      "Saturday"
+    ],
+    "type": "daysofweek"
+  }
+]

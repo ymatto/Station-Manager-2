@@ -71,8 +71,9 @@ list.iter(get_show, showconfig)
 # TODO: If no file configured, should be smart enough to just pull list of
 #       directories from station_playlists_path and use default settings
 # TODO: Deal with failure-to-read better with thoughtful defaults and handling
+# TODO: Ultimately this should probably be in a func so the file can be re-read for updates?
 
-# %include "basscadet_schedule.liq" # DELETE...
+# %include "basscadet_schedule.liq" # Don't need you no more!
 
 showschedule_types = ref [] # "daysofweek", "everyday", ...
 showschedule_days = ref [] # ["Mondays", "Wednesdays"], [""], ...
@@ -114,18 +115,6 @@ end
 list.iter(get_showschedule_strings, showschedule_string_pairs)
 list.iter(get_showschedule_stringlists, showschedule_stringlist_pairs)
 list.iter(get_showschedule_intlists, showschedule_intlist_pairs)
-
-
-# FUNCTIONS TO INITIALIZE SHOW SCHEDULE FOR TODAY
-
-todays_show_names = ref [] # list o' show names
-todays_show_times = ref [] # corresponding list o' show times when they should start
-
-def set_todays_schedule() =
-    # FIXME: temp shit to work out looper logic before figuring this out
-    todays_show_names := ["Braindance", "Beats"]
-    todays_show_times := [0, 13]
-end
 
 
 
@@ -189,15 +178,16 @@ hout = output.icecast(%wav,
 
 
 
-# SET UP AUTOMATED HARBOR SOURCE CONTROL VIA SCHEDULE
+# SET UP AUTOMATED HARBOR SOURCE CONTROL VIA SCHEDULE – AKA DJ LOOPER
 
 current_show_name = ref ""
-current_show_source = ref []
+current_show_output = ref []
 
 default_pulse = ref 10.0 # seconds between loops if there's no other need
 current_day = ref ""
 
-# time crap
+
+# time utilities
 
 def get_weekday_name(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
     daymapping = [
@@ -216,31 +206,97 @@ def get_today() =
     localtime(gettimeofday(), get_weekday_name)
 end
 
+def get_hour_int(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
+    hour
+end
+
+def get_current_hour() =
+    localtime(gettimeofday(), get_hour_int)
+end
+
+
+
+# functions to initialize show schedule for the day
+
+todays_show_names = ref [] # list of hours
+todays_show_times = ref [] # corresponding list of shows
+# and finally, what the DJ can easily scan through...
+todays_schedule = ref [] # list of (hour, "Showname") pairs
+
+def add_indices(this_index, this_listitem) =
+    (this_index, this_listitem)
+end
+
+def find_dow_types (listpair) =
+    this_index = fst(listpair)
+    this_type = snd(listpair)
+    deez_schedule_days = list.nth(default=[""], !showschedule_days, this_index)
+    today = get_today()
+    if (this_type == "daysofweek" and list.mem(today, deez_schedule_days)) then
+        true
+    else
+        false
+    end
+end
+
+def build_show_pair(this_index, this_show_time) =
+    this_show_name = list.nth(default="", !todays_show_names, this_index)
+    (this_show_time, this_show_name)
+end
+
+def set_todays_schedule() =
+    indexed_schedule_types = list.mapi(add_indices, !showschedule_types)
+    matching_indexed_dow_types = list.filter(find_dow_types, indexed_schedule_types)
+    if (list.length(matching_indexed_dow_types) > 0) then # top heirarchy schedule type found
+        chosen_schedule_index = fst(list.hd(default=(0, ""), matching_indexed_dow_types))
+        todays_show_names := list.nth(default=[""], !showschedule_show_names, chosen_schedule_index)
+        todays_show_times := list.nth(default=[0], !showschedule_show_times, chosen_schedule_index)
+        todays_schedule := list.mapi(build_show_pair, !todays_show_times)
+    else
+        todays_schedule := [(0, "blank")] # FIXME: first go look for "everyday" schedules...
+    end
+end
+
+
+
+
 # show control
 
 def changeshow (showname) =
-    show_source = mksafe(crossfade(playlist(id=showname, list.assoc(default="error", showname, !show_paths))))
+    show_path = list.assoc(default="error", showname, !show_paths)
+    show_source = mksafe(crossfade(playlist(id=showname, show_path)))
     s = hout(show_source)
-    current_show_source := [s]
+    current_show_output := [s]
     current_show_name := showname
 end
 
-def get_correct_show() =
-    #FIXME
-    "Braindance"
+def is_prior_show(show) =
+    now_hour = get_current_hour()
+    if (fst(show) <= now_hour) then
+        true
+    else
+        false
+    end
 end
 
-def dj_looper () =
-    print("DJ Looper checking in...")
+def get_correct_show() = # look through todays_schedule to find the right show name
+    prior_schedule = list.filter(is_prior_show, !todays_schedule)
+    snd(list.hd(default=(0, "none"), list.rev(prior_schedule))) #TODO better default thinking
+end
+
+# the control loop
+
+def dj_looper() =
     now_day = get_today()
     if (!current_day != now_day) then
+        print("It's a new day, my people!")
         current_day := now_day
         set_todays_schedule()
     end
     correct_show = get_correct_show()
     if (!current_show_name != correct_show) then
         print("Time for a new show!")
-        list.iter(source.shutdown, !current_show_source) # FIXME can this move into changeshow?
+        list.iter(source.shutdown, !current_show_output) # TODO I dunno why this works here but not in changeshow
         changeshow(correct_show)
         current_show_name := correct_show
     end
@@ -248,7 +304,7 @@ def dj_looper () =
   !default_pulse #FIXME needs to at least try to change shows at ends of tracks
 end
 
-add_timeout(5.0, dj_looper)
+add_timeout(2.0, dj_looper)
 
 
 

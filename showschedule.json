@@ -23,8 +23,8 @@
       "Nightmode"
     ],
     "days": [
-      "Mondays",
-      "Wednesdays"
+      "Monday",
+      "Wednesday"
     ],
     "show_times": [
       0,
@@ -35,7 +35,7 @@
     "type": "daysofweek"
   },
   {
-    "shows_times": [
+    "show_times": [
       0,
       7,
       11,
@@ -43,8 +43,8 @@
       22
     ],
     "days": [
-      "Tuesdays",
-      "Thursdays"
+      "Tuesday",
+      "Thursday"
     ],
     "show_names": [
       "Beats",
@@ -80,14 +80,14 @@
       "Braindance",
       "Nightmode"
     ],
-    "shows_times": [
+    "days": [
+      "Saturday"
+    ],
+    "show_times": [
       0,
       7,
       12,
       20
-    ],
-    "days": [
-      "Saturday"
     ],
     "type": "daysofweek"
   }

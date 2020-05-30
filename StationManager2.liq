@@ -179,18 +179,35 @@ hout = output.icecast(%wav,
 # CONTROL BOARD
 
 current_show_name = ref ""
-current_show_output = ref []
+current_show_source = ref []
 
-end_show = ref false
+fadeout_trackend = ref false
+fadeout_instant = ref false
+
+def set_fadeout_trackend (status) =
+    fadeout_trackend := status
+end
+
+def set_fadeout_instant (status) =
+    fadeout_instant := status
+end
 
 def changeshow (showname) =
     log("New show selected: " ^ showname)
     show_path = list.assoc(default="error", showname, !show_paths)
     show_source = mksafe(playlist(id=showname, show_path))
-    blank_source = blank()
-    final_source = crossfade(switch(track_sensitive=true, [({!end_show == true}, blank_source), ({true}, show_source)]))
+    trackend_switched_source =
+        crossfade(
+            switch( track_sensitive=true,
+                [ ({!fadeout_trackend == true}, blank()), ({true}, show_source) ]
+            )
+        )
+    final_source =
+        switch( track_sensitive=false,
+            [ ({!fadeout_instant == true}, blank()), ({true}, trackend_switched_source) ]
+        )
     s = hout(final_source)
-    current_show_output := [s]
+    current_show_source := [s]
     current_show_name := showname
 end
 
@@ -200,6 +217,7 @@ end
 # SET UP AUTOMATED HARBOR SOURCE CONTROL VIA SCHEDULE – AKA DJ LOOPER
 
 default_pulse = ref 10.0 # seconds between loops if there's no other need
+next_pulse = ref 0.0
 current_day = ref ""
 
 # time utilities
@@ -290,21 +308,24 @@ end
 # the control loop
 
 def dj_looper() =
+    next_pulse := !default_pulse
     now_day = get_today()
+    # check for new day
     if (!current_day != now_day) then
         print("It's a new day, listeners! Let's pull up today's schedule!")
         current_day := now_day
         set_todays_schedule()
     end
+    # check if it's time for a show changeover
     correct_show = get_correct_show()
     if (!current_show_name != correct_show) then
         print("Time for " ^ correct_show ^ "!")
-        list.iter(source.shutdown, !current_show_output) # TODO I dunno why this works here but not in changeshow
+        list.iter(source.shutdown, !current_show_source) # TODO I dunno why this works here but not in changeshow
         changeshow(correct_show)
         current_show_name := correct_show
     end
 
-    !default_pulse # FIXME needs to at least try to change shows at ends of tracks
+    !next_pulse
 end
 
 log("Starting DJ control loop.")

@@ -5,7 +5,7 @@
 
 # LOAD STATIONCONFIG
 
-stationconfig_file = file.contents(argv(default="", 1)) # TODO: default configuration handling with no argv?
+stationconfig_file = file.contents(argv(default="", 1)) # TODO: allow script to proceed with defaults without argv?
 station_config_strings = of_json(default=[("error", "no station config")], stationconfig_file)
 station_config_ints = of_json(default=[("", 0)], stationconfig_file)
 
@@ -13,7 +13,7 @@ if station_config_strings["error"] == "no station config" then
   log("station config invalid")
 end
 
-# TODO: These should probably all use list.assoc to have specified defaults
+# TODO: These should  all use list.assoc to have specified defaults when not specified in config file
 station_name = station_config_strings["name"]
 station_description = station_config_strings["description"]
 # station_spoken_ID = station_config_strings["spoken_ID"]
@@ -67,12 +67,10 @@ list.iter(get_show, showconfig)
 
 # LOAD SHOW SCHEDULE
 
-# TODO: If no file configured, should be smart enough to just pull list of
-#       directories from station_playlists_path and use default settings
+# TODO: If no file configured, should be smart enough to just pull list of directories
+#       from station_playlists_root (if specified) and set reasonable defaults
 # TODO: Deal with failure-to-read better with thoughtful defaults and handling
 # TODO: Ultimately this should probably be in a func so the file can be re-read for updates?
-
-# %include "basscadet_schedule.liq" # Don't need you no more!
 
 showschedule_types = ref [] # "daysofweek", "everyday", ...
 showschedule_days = ref [] # ["Mondays", "Wednesdays"], [""], ...
@@ -177,14 +175,32 @@ hout = output.icecast(%wav,
 
 
 
-# SET UP AUTOMATED HARBOR SOURCE CONTROL VIA SCHEDULE – AKA DJ LOOPER
+
+# CONTROL BOARD
 
 current_show_name = ref ""
 current_show_output = ref []
 
+end_show = ref false
+
+def changeshow (showname) =
+    log("New show selected: " ^ showname)
+    show_path = list.assoc(default="error", showname, !show_paths)
+    show_source = mksafe(playlist(id=showname, show_path))
+    blank_source = blank()
+    final_source = crossfade(switch(track_sensitive=true, [({!end_show == true}, blank_source), ({true}, show_source)]))
+    s = hout(final_source)
+    current_show_output := [s]
+    current_show_name := showname
+end
+
+
+
+
+# SET UP AUTOMATED HARBOR SOURCE CONTROL VIA SCHEDULE – AKA DJ LOOPER
+
 default_pulse = ref 10.0 # seconds between loops if there's no other need
 current_day = ref ""
-
 
 # time utilities
 
@@ -214,8 +230,7 @@ def get_current_hour() =
 end
 
 
-
-# functions to initialize show schedule for the day
+# functions for daily show management
 
 todays_show_names = ref [] # list of hours
 todays_show_times = ref [] # corresponding list of shows
@@ -254,19 +269,7 @@ def set_todays_schedule() =
     else
         todays_schedule := [(0, "blank")] # FIXME: first go look for "everyday" schedules...
     end
-end
-
-
-
-
-# show control
-
-def changeshow (showname) =
-    show_path = list.assoc(default="error", showname, !show_paths)
-    show_source = mksafe(crossfade(playlist(id=showname, show_path)))
-    s = hout(show_source)
-    current_show_output := [s]
-    current_show_name := showname
+    log("New schedule for today loaded.") # TODO: log a textification of the schedule
 end
 
 def is_prior_show(show) =
@@ -283,27 +286,29 @@ def get_correct_show() = # look through todays_schedule to find the right show n
     snd(list.hd(default=(0, "none"), list.rev(prior_schedule))) # TODO better default thinking
 end
 
+
 # the control loop
 
 def dj_looper() =
     now_day = get_today()
     if (!current_day != now_day) then
-        print("It's a new day, my people!")
+        print("It's a new day, listeners! Let's pull up today's schedule!")
         current_day := now_day
         set_todays_schedule()
     end
     correct_show = get_correct_show()
     if (!current_show_name != correct_show) then
-        print("Time for a new show!")
+        print("Time for " ^ correct_show ^ "!")
         list.iter(source.shutdown, !current_show_output) # TODO I dunno why this works here but not in changeshow
         changeshow(correct_show)
         current_show_name := correct_show
     end
 
-  !default_pulse # FIXME needs to at least try to change shows at ends of tracks
+    !default_pulse # FIXME needs to at least try to change shows at ends of tracks
 end
 
-add_timeout(2.0, dj_looper) #start it up!
+log("Starting DJ control loop.")
+add_timeout(0.0, dj_looper) #start it up!
 
 
 

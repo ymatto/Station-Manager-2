@@ -5,8 +5,7 @@
 
 # LOAD STATIONCONFIG
 
-# TODO: allow multiple configs within the config file for multiple output streams of the same station
-stationconfig_file = file.contents("stationconfig.json") # CHANGEME TO TEST
+stationconfig_file = file.contents(argv(default="", 1)) # TODO: default configuration handling with no argv?
 station_config_strings = of_json(default=[("error", "no station config")], stationconfig_file)
 station_config_ints = of_json(default=[("", 0)], stationconfig_file)
 
@@ -174,7 +173,7 @@ hout = output.icecast(%wav,
       port = 8033,
       host = "0.0.0.0",
       mount = "broadcast-harbor",
-      password = "ncr89nqenfihs997hfxa") #TODO: randomly generate password for this?
+      password = "ncr89nqenfihs997hfxa") # TODO: randomly generate password for this?
 
 
 
@@ -281,7 +280,7 @@ end
 
 def get_correct_show() = # look through todays_schedule to find the right show name
     prior_schedule = list.filter(is_prior_show, !todays_schedule)
-    snd(list.hd(default=(0, "none"), list.rev(prior_schedule))) #TODO better default thinking
+    snd(list.hd(default=(0, "none"), list.rev(prior_schedule))) # TODO better default thinking
 end
 
 # the control loop
@@ -301,10 +300,10 @@ def dj_looper() =
         current_show_name := correct_show
     end
 
-  !default_pulse #FIXME needs to at least try to change shows at ends of tracks
+  !default_pulse # FIXME needs to at least try to change shows at ends of tracks
 end
 
-add_timeout(2.0, dj_looper)
+add_timeout(2.0, dj_looper) #start it up!
 
 
 

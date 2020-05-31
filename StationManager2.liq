@@ -265,15 +265,15 @@ def get_current_hour() =
     localtime(gettimeofday(), get_hour_int)
 end
 
-def get_seconds_since_midnight(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
-    sec + (min * 60 + (hour * 3600))
+def get_time_since_midnight(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
+    float_of_int(sec + (min * 60 + (hour * 3600)))
 end
 
 # returns the unixtime at midnight at the start of today
 def get_today_start_time() =
     now = gettimeofday()
-    seconds_since_midnight = localtime(now, get_seconds_since_midnight)
-    int_of_float(now) - seconds_since_midnight
+    time_since_midnight = localtime(now, get_time_since_midnight)
+    now - time_since_midnight
 end
 
 
@@ -288,10 +288,10 @@ end
 
 current_scheduled_show_name = ref ""
 current_scheduled_show_hour = ref 0
-current_scheduled_show_time = ref 0
+current_scheduled_show_time = ref 0.0
 next_scheduled_show_name = ref ""
 next_scheduled_show_hour = ref 0
-next_scheduled_show_time = ref 0
+next_scheduled_show_time = ref 0.0
 
 def add_indices(this_index, this_listitem) =
     (this_index, this_listitem)
@@ -343,7 +343,7 @@ def update_current_next_shows () =
 
 
     today_start_time = get_today_start_time()
-    tomorrow_start_time = today_start_time + 86400
+    tomorrow_start_time = today_start_time + 86400.0
     indexed_schedule_types = list.mapi(add_indices, !showschedule_types)
 
     #TODO: search for "daysofyear" types first
@@ -364,13 +364,13 @@ def update_current_next_shows () =
     todays_current_index = fst(list.hd(default=(0, 0), list.rev(prior_indexed_todays_show_hours)))
     current_scheduled_show_name := list.nth(default="", !todays_show_names, todays_current_index)
     current_scheduled_show_hour := list.nth(default=0, !todays_show_hours, todays_current_index)
-    current_scheduled_show_time := today_start_time + !current_scheduled_show_hour * 3600
+    current_scheduled_show_time := today_start_time + float_of_int(!current_scheduled_show_hour) * 3600.0
     # now let's see if we can just grab the next show from today's schedule...
     if (list.length(!todays_show_names) > todays_current_index + 1) then
         # yup, grab it!
         next_scheduled_show_name := list.nth(default="", !todays_show_names, todays_current_index + 1)
         next_scheduled_show_hour := list.nth(default=0, !todays_show_hours, todays_current_index + 1)
-        next_scheduled_show_time := today_start_time + !next_scheduled_show_hour * 3600
+        next_scheduled_show_time := today_start_time + float_of_int(!next_scheduled_show_hour) * 3600.0
     else
         # okay, gotta use tomorrow's schedule...
         log("Gotta use tomorrow's schedule for next show...")
@@ -390,7 +390,7 @@ def update_current_next_shows () =
         end
         next_scheduled_show_name := list.hd(default="", !tomorrows_show_names)
         next_scheduled_show_hour := list.hd(default=0, !tomorrows_show_hours)
-        next_scheduled_show_time := tomorrow_start_time + !next_scheduled_show_hour * 3600
+        next_scheduled_show_time := tomorrow_start_time + float_of_int(!next_scheduled_show_hour) * 3600.0
     end
     log("Current show name updated:  " ^ !current_scheduled_show_name)
     log("Current show time updated:  " ^ string_of(!current_scheduled_show_time))
@@ -402,12 +402,12 @@ end
 
 # the control loop
 
-default_pulse = ref 10 # seconds between loops if there's no other need
-next_pulse = ref 0
+default_pulse = ref 10.0 # seconds between loops if there's no other need
+next_pulse = ref 0.0
 
 def dj_looper() =
     next_pulse := !default_pulse
-    now = int_of_float(gettimeofday())
+    now = gettimeofday()
     #FIXME instant switchover for now... go to soft switchover below
     if (now >= !next_scheduled_show_time) then
         # only do this stuff if there's an actual show switch
@@ -430,7 +430,7 @@ def dj_looper() =
 #        end
 #    end
 
-    float_of_int(!next_pulse)
+    !next_pulse
 end
 
 

@@ -75,7 +75,7 @@ list.iter(get_show, showconfig)
 showschedule_types = ref [] # "daysofweek", "everyday", ...
 showschedule_days = ref [] # ["Mondays", "Wednesdays"], [""], ...
 showschedule_show_names = ref [] # ["Afterparty", "Groovestyle", "Nightmode"], ["Braindance", "Beats"], ...
-showschedule_show_times = ref [] # [0, 7, 16], [0, 12], ...
+showschedule_show_hours = ref [] # [0, 7, 16], [0, 12], ...
 
 showschedule_file = file.contents(station_showschedule_path)
 
@@ -87,7 +87,7 @@ showschedule_stringlist_pairs = of_json(                    # days, show_names
     default=[ [ ("stringarrays_error", [ "" ]) ] ],
     showschedule_file
     )
-showschedule_intlist_pairs = of_json(                       # show_times
+showschedule_intlist_pairs = of_json(                       # show_hours
     default=[ [ ("intarrays_error", [ 0 ]) ] ],
     showschedule_file
     )
@@ -105,8 +105,8 @@ def get_showschedule_stringlists(stringlist_pairs) =
 end
 
 def get_showschedule_intlists(intarray_pairs) =
-    this_show_times = list.assoc (default=[0], "show_times", intarray_pairs) # TODO: check default handling?
-    showschedule_show_times := list.append([this_show_times], !showschedule_show_times)
+    this_show_hours = list.assoc (default=[0], "show_hours", intarray_pairs) # TODO: check default handling?
+    showschedule_show_hours := list.append([this_show_hours], !showschedule_show_hours)
 end
 
 list.iter(get_showschedule_strings, showschedule_string_pairs)
@@ -216,10 +216,6 @@ end
 
 # SET UP AUTOMATED HARBOR SOURCE CONTROL VIA SCHEDULE – AKA DJ LOOPER
 
-default_pulse = ref 10.0 # seconds between loops if there's no other need
-next_pulse = ref 0.0
-current_day = ref ""
-
 # time utilities
 
 def get_weekday_name(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
@@ -239,6 +235,10 @@ def get_today() =
     localtime(gettimeofday(), get_weekday_name)
 end
 
+def get_tomorrow() =
+    localtime(gettimeofday()+86400.0, get_weekday_name)
+end
+
 def get_hour_int(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
     hour
 end
@@ -247,19 +247,39 @@ def get_current_hour() =
     localtime(gettimeofday(), get_hour_int)
 end
 
+def get_seconds_since_midnight(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
+    sec + (min * 60 + (hour * 3600))
+end
 
-# functions for daily show management
+# returns the unixtime at midnight at the start of today
+def get_today_start_time() =
+    now = gettimeofday()
+    seconds_since_midnight = localtime(now, get_seconds_since_midnight)
+    int_of_float(now) - seconds_since_midnight
+end
 
-todays_show_names = ref [] # list of hours
-todays_show_times = ref [] # corresponding list of shows
-# and finally, what the DJ can easily scan through...
-todays_schedule = ref [] # list of (hour, "Showname") pairs
+
+# functions for show management
+
+# The thing to do is to set these the first time, and keep track of the index
+# So updating can just keep rolling forward rather than ever having to look
+# back or any silliness
+
+# should I just require that show days start at 0 so that I never have to look backward?
+# yes. yes I should.
+
+current_scheduled_show_name = ref ""
+current_scheduled_show_hour = ref 0
+current_scheduled_show_time = ref 0
+next_scheduled_show_name = ref ""
+next_scheduled_show_hour = ref 0
+next_scheduled_show_time = ref 0
 
 def add_indices(this_index, this_listitem) =
     (this_index, this_listitem)
 end
 
-def find_dow_types (listpair) =
+def find_todays_dow_types (listpair) =
     this_index = fst(listpair)
     this_type = snd(listpair)
     deez_schedule_days = list.nth(default=[""], !showschedule_days, this_index)
@@ -271,65 +291,144 @@ def find_dow_types (listpair) =
     end
 end
 
-def build_show_pair(this_index, this_show_time) =
-    this_show_name = list.nth(default="", !todays_show_names, this_index)
-    (this_show_time, this_show_name)
-end
-
-def set_todays_schedule() =
-    indexed_schedule_types = list.mapi(add_indices, !showschedule_types)
-    matching_indexed_dow_types = list.filter(find_dow_types, indexed_schedule_types)
-    if (list.length(matching_indexed_dow_types) > 0) then # top heirarchy schedule type found
-        chosen_schedule_index = fst(list.hd(default=(0, ""), matching_indexed_dow_types))
-        todays_show_names := list.nth(default=[""], !showschedule_show_names, chosen_schedule_index)
-        todays_show_times := list.nth(default=[0], !showschedule_show_times, chosen_schedule_index)
-        todays_schedule := list.mapi(build_show_pair, !todays_show_times)
-    else
-        todays_schedule := [(0, "blank")] # FIXME: first go look for "everyday" schedules...
-    end
-    log("New schedule for today loaded.") # TODO: log a textification of the schedule
-end
-
-def is_prior_show(show) =
-    now_hour = get_current_hour()
-    if (fst(show) <= now_hour) then
+def find_tomorrows_dow_types (listpair) =
+    this_index = fst(listpair)
+    this_type = snd(listpair)
+    deez_schedule_days = list.nth(default=[""], !showschedule_days, this_index)
+    tomorrow = get_tomorrow() # <-- note
+    if (this_type == "daysofweek" and list.mem(tomorrow, deez_schedule_days)) then
         true
     else
         false
     end
 end
 
-def get_correct_show() = # look through todays_schedule to find the right show name
-    prior_schedule = list.filter(is_prior_show, !todays_schedule)
-    snd(list.hd(default=(0, "none"), list.rev(prior_schedule))) # TODO better default thinking
+def is_prior_hour(listpair) =
+    this_index = fst(listpair)
+    this_hour = snd(listpair)
+    now_hour = get_current_hour()
+    if (this_hour <= now_hour) then
+        true
+    else
+        false
+    end
 end
+
+def update_current_next_shows () =
+    log("Updating current and next shows...")
+    todays_schedule_index = ref 0
+    todays_show_names = ref []
+    todays_show_hours = ref [0]
+    tomorrows_schedule_index = ref 0
+    tomorrows_show_names = ref []
+    tomorrows_show_hours = ref [0]
+
+
+    today_start_time = get_today_start_time()
+    tomorrow_start_time = today_start_time + 86400
+    indexed_schedule_types = list.mapi(add_indices, !showschedule_types)
+
+    #TODO: search for "daysofyear" types first
+    todays_indexed_dow_schedules = list.filter(find_todays_dow_types, indexed_schedule_types)
+    # is there a top heirarchy schedule type for today?
+    if (list.length(todays_indexed_dow_schedules) > 0) then
+        todays_schedule_index := fst(list.hd(default=(0, ""), todays_indexed_dow_schedules))
+        todays_show_names := list.nth(default=[""], !showschedule_show_names, !todays_schedule_index)
+        todays_show_hours := list.nth(default=[0], !showschedule_show_hours, !todays_schedule_index)
+    else
+        # TODO: go look for "everyday" schedules and remove this placeholder crap
+        todays_schedule_index := 0
+        todays_show_names := [""]
+        todays_show_hours := [0]
+    end
+    indexed_todays_show_hours = list.mapi(add_indices, !todays_show_hours)
+    prior_indexed_todays_show_hours = list.filter(is_prior_hour, indexed_todays_show_hours)
+    todays_current_index = fst(list.hd(default=(0, 0), list.rev(prior_indexed_todays_show_hours)))
+    current_scheduled_show_name := list.nth(default="", !todays_show_names, todays_current_index)
+    current_scheduled_show_hour := list.nth(default=0, !todays_show_hours, todays_current_index)
+    current_scheduled_show_time := today_start_time + !current_scheduled_show_hour * 3600
+    # now let's see if we can just grab the next show from today's schedule...
+    if (list.length(!todays_show_names) > todays_current_index + 1) then
+        # yup, grab it!
+        next_scheduled_show_name := list.nth(default="", !todays_show_names, todays_current_index + 1)
+        next_scheduled_show_hour := list.nth(default=0, !todays_show_hours, todays_current_index + 1)
+        next_scheduled_show_time := today_start_time + !next_scheduled_show_hour * 3600
+    else
+        # okay, gotta use tomorrow's schedule...
+        log("Gotta use tomorrow's schedule for next show...")
+
+        #TODO: search for "daysofyear" types first
+        tomorrows_indexed_dow_schedules = list.filter(find_tomorrows_dow_types, indexed_schedule_types)
+        # is there a top heirarchy schedule type for tomorrow?
+        if (list.length(tomorrows_indexed_dow_schedules) > 0) then
+            tomorrows_schedule_index := fst(list.hd(default=(0, ""), tomorrows_indexed_dow_schedules))
+            tomorrows_show_names := list.nth(default=[""], !showschedule_show_names, !tomorrows_schedule_index)
+            tomorrows_show_hours := list.nth(default=[0], !showschedule_show_hours, !tomorrows_schedule_index)
+        else
+            # TODO: go look for "everyday" schedules and remove this placeholder crap
+            tomorrows_schedule_index := 0
+            tomorrows_show_names := [""]
+            tomorrows_show_hours := [0]
+        end
+        next_scheduled_show_name := list.hd(default="", !tomorrows_show_names)
+        next_scheduled_show_hour := list.hd(default=0, !tomorrows_show_hours)
+        next_scheduled_show_time := tomorrow_start_time + !next_scheduled_show_hour * 3600
+    end
+    log("Current show name updated:  " ^ !current_scheduled_show_name)
+    log("Current show time updated:  " ^ string_of(!current_scheduled_show_time))
+    log("Next show name updated:     " ^ !next_scheduled_show_name)
+    log("Next show time updated:     " ^ string_of(!next_scheduled_show_time))
+end
+
 
 
 # the control loop
 
+default_pulse = ref 10 # seconds between loops if there's no other need
+next_pulse = ref 0
+
 def dj_looper() =
     next_pulse := !default_pulse
-    now_day = get_today()
-    # check for new day
-    if (!current_day != now_day) then
-        print("It's a new day, listeners! Let's pull up today's schedule!")
-        current_day := now_day
-        set_todays_schedule()
-    end
+    now = int_of_float(gettimeofday())
     # check if it's time for a show changeover
-    correct_show = get_correct_show()
-    if (!current_show_name != correct_show) then
-        print("Time for " ^ correct_show ^ "!")
-        list.iter(source.shutdown, !current_show_source) # TODO I dunno why this works here but not in changeshow
-        changeshow(correct_show)
-        current_show_name := correct_show
+    if (now >= !next_scheduled_show_time) then
+        # only do this stuff if there's an actual show switch
+        # (could just be a day switchover from one show to the same show)
+        if (!next_scheduled_show_name != !current_scheduled_show_name) then
+            log("DJ LOOPER: Current time: " ^ string_of(now))
+            log("DJ LOOPER: Time for " ^ !next_scheduled_show_name ^ "!")
+            set_fadeout_trackend(false)
+            list.iter(source.shutdown, !current_show_source) # TODO I dunno why this works here but not in changeshow
+            changeshow(!next_scheduled_show_name)
+        end
+        # regardless, time to update what the current and next shows are
+        update_current_next_shows()
+    end
+    # check if it's time to prepare for a show changeover on the next loop
+    this_track_remaining = int_of_float(source.remaining(list.hd(default=blank(), !current_show_source)))
+    if ( (this_track_remaining < !default_pulse + 5) and (now + !default_pulse + 5 >= !next_scheduled_show_time)) then
+        next_pulse := this_track_remaining + 8
+        log("DJ LOOPER: Current time: " ^ string_of(now))
+        log("DJ LOOPER: Next show coming up...")
+        # only set up the fade if we're actually changing shows
+        if (!next_scheduled_show_name != !current_scheduled_show_name) then
+            log("DJ LOOPER: Set fade-out for a new show...")
+            set_fadeout_trackend(true)
+        end
     end
 
-    !next_pulse
+    float_of_int(!next_pulse)
 end
 
-log("Starting DJ control loop.")
-add_timeout(0.0, dj_looper) #start it up!
+
+# kick off automatic show management
+
+# TODO: make initiating and halting the DJ control loop control board functions
+
+update_current_next_shows()
+changeshow(!current_scheduled_show_name)
+log("Initiating DJ control loop.")
+add_timeout(3.0, dj_looper) #start it up!
 
 
 

@@ -41,11 +41,11 @@ set("log.file.path",station_log_path)
 # LOAD SHOWCONFIG
 
 # TODO: For now just pulling a list of names for the sake of the currentShow.log, need to parse the rest
-# TODO: Probably build other lists other than show_names/paths here at some point.
+# TODO: Probably build other lists other than show_longnames/paths here at some point.
 # TODO: Deal with failure-to-read better with thoughtful defaults and handling
 
 show_paths = ref [] # ("Beats", "files/Instrumental Hip-Hop"), ("Groovestyle", "files/Stylish Background"), ...
-show_names = ref [] # ("Beats", "Straight Beats"), ("Groovestyle", "Groovestyle"), ...
+show_longnames = ref [] # ("Beats", "Straight Beats"), ("Groovestyle", "Groovestyle"), ...
 
 showconfig_file = file.contents(station_showconfig_path)
 showconfig = of_json(default=[ ( "error" , [("no show found", "")] ) ], showconfig_file)
@@ -56,8 +56,8 @@ def get_show(thisshow) =
 
   thisshowpath = list.assoc (default="error", "playlist_path", thisshowdata) # TODO: deal with failure better
   show_paths := list.append([(thisshowkey, "#{!station_playlists_root}#{thisshowpath}")], !show_paths)
-  thisshowname = list.assoc (default="error", "show_name", thisshowdata) # TODO: deal with failure better
-  show_names := list.append([(thisshowkey, thisshowname)], !show_names)
+  thisshowlongname = list.assoc (default="error", "show_longname", thisshowdata) # TODO: deal with failure better
+  show_longnames := list.append([(thisshowkey, thisshowlongname)], !show_longnames)
 end
 
 list.iter(get_show, showconfig)
@@ -150,7 +150,7 @@ def logtrack(metadata) =
     currentshow_logname := newshow
     ignore(
       file.write(
-        data=list.assoc(default="", newshow, !show_names),
+        data=list.assoc(default="", newshow, !show_longnames),
         append=false,
         station_currentshow_path
       )
@@ -192,7 +192,7 @@ def set_fadeout_instant (status) =
     fadeout_instant := status
 end
 
-def changeshow (showname) =
+def output_new_show (showname) =
     log("New show selected: " ^ showname)
     show_path = list.assoc(default="error", showname, !show_paths)
     show_source = mksafe(playlist(id=showname, show_path))
@@ -211,6 +211,24 @@ def changeshow (showname) =
     current_show_name := showname
 end
 
+def change_show_trackend(showname) =
+    if (list.assoc(default="error", showname, !show_paths) != "error") then
+        set_fadeout_trackend(true)
+#        this_track_remaining = source.remaining(list.hd(default=blank(), !current_show_source))
+        # FIXME somehow set up the output_new_show. add to a queue? set an add_timeout?
+        #       dont' forget that fadeout_trackend needs to be reset... this suggests a handler thing
+    else
+        log("No playlist path specified for requested show: " ^ showname)
+    end
+end
+
+def change_show_now(showname) =
+    if (list.assoc(default="error", showname, !show_paths) != "error") then
+        output_new_show(showname)
+    else
+        log("No playlist path specified for requested show: " ^ showname)
+    end
+end
 
 
 
@@ -390,32 +408,27 @@ next_pulse = ref 0
 def dj_looper() =
     next_pulse := !default_pulse
     now = int_of_float(gettimeofday())
-    # check if it's time for a show changeover
+    #FIXME instant switchover for now... go to soft switchover below
     if (now >= !next_scheduled_show_time) then
         # only do this stuff if there's an actual show switch
         # (could just be a day switchover from one show to the same show)
         if (!next_scheduled_show_name != !current_scheduled_show_name) then
-            log("DJ LOOPER: Current time: " ^ string_of(now))
             log("DJ LOOPER: Time for " ^ !next_scheduled_show_name ^ "!")
-            set_fadeout_trackend(false)
-            list.iter(source.shutdown, !current_show_source) # TODO I dunno why this works here but not in changeshow
-            changeshow(!next_scheduled_show_name)
+            list.iter(source.shutdown, !current_show_source) # TODO I dunno why this works here but not in output_new_show
+            change_show_now(!next_scheduled_show_name)
         end
         # regardless, time to update what the current and next shows are
         update_current_next_shows()
     end
     # check if it's time to prepare for a show changeover on the next loop
-    this_track_remaining = int_of_float(source.remaining(list.hd(default=blank(), !current_show_source)))
-    if ( (this_track_remaining < !default_pulse + 5) and (now + !default_pulse + 5 >= !next_scheduled_show_time)) then
-        next_pulse := this_track_remaining + 8
-        log("DJ LOOPER: Current time: " ^ string_of(now))
-        log("DJ LOOPER: Next show coming up...")
-        # only set up the fade if we're actually changing shows
-        if (!next_scheduled_show_name != !current_scheduled_show_name) then
-            log("DJ LOOPER: Set fade-out for a new show...")
-            set_fadeout_trackend(true)
-        end
-    end
+#    this_track_remaining = int_of_float(source.remaining(list.hd(default=blank(), !current_show_source)))
+#    if (now + this_track_remaining >= !next_scheduled_show_time) then
+#        # only set up the fade if we're actually changing shows
+#        if (!next_scheduled_show_name != !current_scheduled_show_name and !fadeout_trackend != true) then
+#            log("DJ LOOPER: Set fade-out to prepare for a new show...")
+#            change_show_trackend(!next_scheduled_show_name)
+#        end
+#    end
 
     float_of_int(!next_pulse)
 end
@@ -426,7 +439,7 @@ end
 # TODO: make initiating and halting the DJ control loop control board functions
 
 update_current_next_shows()
-changeshow(!current_scheduled_show_name)
+output_new_show(!current_scheduled_show_name)
 log("Initiating DJ control loop.")
 add_timeout(3.0, dj_looper) #start it up!
 

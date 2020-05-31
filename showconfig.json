@@ -3,49 +3,49 @@
     "shuffle_mode": "songs",
     "DJ_voice": "Alex",
     "show_description": "real hip-hop in your face",
-    "show_name": "The Bump",
-    "playlist_path": "Bump in the Trunk"
+    "playlist_path": "Bump in the Trunk",
+    "show_longname": "The Bump"
   },
   "Headnod": {
     "shuffle_mode": "songs",
     "DJ_voice": "Alex",
     "show_description": "laid-back hip-hop tracks from the 90s to today",
-    "show_name": "The Head Nod",
-    "playlist_path": "Laid Back Hip-Hop"
+    "playlist_path": "Laid Back Hip-Hop",
+    "show_longname": "The Head Nod"
   },
   "Beats": {
     "shuffle_mode": "songs",
     "DJ_voice": "Whisper",
     "show_description": "instrumental hip-hop",
-    "show_name": "Straight Beats",
-    "playlist_path": "Instrumental Hip-Hop"
+    "playlist_path": "Instrumental Hip-Hop",
+    "show_longname": "Straight Beats"
   },
   "Afterparty": {
     "shuffle_mode": "songs",
     "DJ_voice": "Daniel",
     "show_description": "rhythms for late-night voyages",
-    "show_name": "The Afterparty Show",
-    "playlist_path": "Afterparty"
+    "playlist_path": "Afterparty",
+    "show_longname": "The Afterparty Show"
   },
   "Braindance": {
     "shuffle_mode": "songs",
     "DJ_voice": "Daniel",
     "show_description": "beat-oriented electronic music",
-    "show_name": "The Brain Dance Show",
-    "playlist_path": "Braindance"
+    "playlist_path": "Braindance",
+    "show_longname": "The Brain Dance Show"
   },
   "Groovestyle": {
     "shuffle_mode": "songs",
     "DJ_voice": "Ava",
     "show_description": "your personal soundtrack",
-    "show_name": "Groovestyle",
-    "playlist_path": "Stylish Background"
+    "playlist_path": "Stylish Background",
+    "show_longname": "Groovestyle"
   },
   "Nightmode": {
     "shuffle_mode": "songs",
     "DJ_voice": "Whisper",
     "show_description": "deep electronic tracks for your mind",
-    "show_name": "Nightmode",
-    "playlist_path": "Late Night Electronic"
+    "playlist_path": "Late Night Electronic",
+    "show_longname": "Nightmode"
   }
 }

@@ -117,13 +117,13 @@ list.iter(get_showschedule_intlists, showschedule_intlist_pairs)
 
 
 
-# FUNCTIONS TO UPDATE LOG DATA ON NEW TRACK
+# FUNCTIONS TO UPDATE LOG DATA ON NEW METADATA
 
 currentshow_logname = ref ""
 recent_tracks = ref []
 new_tracklog = ref ""
 
-# Write stuff whenever there's a new track
+# Write stuff whenever there's new metadata
 
 def addtotracklog(nexttrack) =
   new_tracklog := string.concat([!new_tracklog, nexttrack, "\n"])
@@ -176,13 +176,33 @@ hout = output.icecast(%wav,
 
 
 
+
 # CONTROL BOARD
+# TODO: Allow injection of commands to be run in X seconds... can timestamp when
+#       it should run, and keep track of a "next timed command" that the command
+#       loop can check. With that, put a little delay before show switches, etc.
 
 current_show_name = ref ""
-current_show_source = ref []
+current_show_source = ref [hout(blank())]
 
 fadeout_trackend = ref false
 fadeout_instant = ref false
+
+track_endtime = ref false
+
+trackend_command_queue = ref []
+
+def trackend_enqueue(command) =
+    #FIXME dumb
+    trackend_command_queue := [command]
+end
+
+def trackend_readqueue() =
+    #FIXME dumb
+    command = list.hd(default=[""], !trackend_command_queue)
+    trackend_command_queue := []
+    command
+end
 
 def set_fadeout_trackend (status) =
     fadeout_trackend := status
@@ -192,43 +212,79 @@ def set_fadeout_instant (status) =
     fadeout_instant := status
 end
 
-def output_new_show (showname) =
-    log("New show selected: " ^ showname)
-    show_path = list.assoc(default="error", showname, !show_paths)
-    show_source = mksafe(playlist(id=showname, show_path))
-    trackend_switched_source =
-        crossfade(
-            switch( track_sensitive=true,
-                [ ({!fadeout_trackend == true}, blank()), ({true}, show_source) ]
-            )
-        )
-    final_source =
-        switch( track_sensitive=false,
-            [ ({!fadeout_instant == true}, blank()), ({true}, trackend_switched_source) ]
-        )
-    s = hout(final_source)
-    current_show_source := [s]
-    current_show_name := showname
+def shutdown_output() =
+    list.iter(source.shutdown, !current_show_source)
 end
 
 def change_show_trackend(showname) =
     if (list.assoc(default="error", showname, !show_paths) != "error") then
         set_fadeout_trackend(true)
-#        this_track_remaining = source.remaining(list.hd(default=blank(), !current_show_source))
-        # FIXME somehow set up the output_new_show. add to a queue? set an add_timeout?
-        #       dont' forget that fadeout_trackend needs to be reset... this suggests a handler thing
+        trackend_enqueue(["change_show_trackend_finish", showname])
     else
         log("No playlist path specified for requested show: " ^ showname)
     end
 end
 
+def handle_track_end (offset, metadata) =
+    log("--- track change ---")
+    track_endtime := true # triggers the command_loop
+end
+
+def output_new_show (show_name) =
+    log("New show selected: " ^ show_name)
+    show_path = list.assoc(default="error", show_name, !show_paths)
+    show_source = playlist(id=show_name, show_path)
+    output_source =
+        mksafe(
+            crossfade(duration=5.0, #TODO make this (and offset below) a config parameter
+                on_offset(offset=5.0, handle_track_end, # should basically hit end of track
+                    switch( track_sensitive=false, [ ({!fadeout_instant == true}, blank()), ({true},
+                        switch( track_sensitive=true, [ ({!fadeout_trackend == true}, blank()), ({true},
+                            show_source
+                        ) ] )
+                    ) ] )
+                )
+            )
+        )
+    s = hout(output_source)
+    current_show_source := [s]
+    current_show_name := show_name
+end
+
+def change_show_trackend_finish(showname) =
+    shutdown_output() # Can't be within output_new_show for reasons I can't figure out
+    output_new_show(showname)
+    set_fadeout_trackend(false)
+end
+
 def change_show_now(showname) =
     if (list.assoc(default="error", showname, !show_paths) != "error") then
+        shutdown_output() # Can't be within output_new_show for reasons I can't figure out
         output_new_show(showname)
     else
         log("No playlist path specified for requested show: " ^ showname)
     end
 end
+
+def command_loop() =
+    if (!track_endtime) then
+        if (list.length(!trackend_command_queue) > 0) then
+            # FIXME: write a real trackend queue handler
+            command = trackend_readqueue()
+            commandname = list.hd(default="", command)
+            commandarg = list.nth(default="", command, 1)
+            log("processing command: " ^ commandname ^ " - with argument: " ^ commandarg)
+            if (commandname == "change_show_trackend_finish") then
+                change_show_trackend_finish(commandarg)
+            end
+        end
+        track_endtime := false
+    end
+    0.1
+end
+
+add_timeout(0.1, command_loop)
+
 
 
 
@@ -278,13 +334,6 @@ end
 
 
 # functions for show management
-
-# The thing to do is to set these the first time, and keep track of the index
-# So updating can just keep rolling forward rather than ever having to look
-# back or any silliness
-
-# should I just require that show days start at 0 so that I never have to look backward?
-# yes. yes I should.
 
 current_scheduled_show_name = ref ""
 current_scheduled_show_hour = ref 0
@@ -393,55 +442,41 @@ def update_current_next_shows () =
         next_scheduled_show_time := tomorrow_start_time + float_of_int(!next_scheduled_show_hour) * 3600.0
     end
     log("Current show name updated:  " ^ !current_scheduled_show_name)
-    log("Current show time updated:  " ^ string_of(!current_scheduled_show_time))
     log("Next show name updated:     " ^ !next_scheduled_show_name)
-    log("Next show time updated:     " ^ string_of(!next_scheduled_show_time))
 end
 
 
 
 # the control loop
 
-default_pulse = ref 10.0 # seconds between loops if there's no other need
+default_pulse = 5.0 # seconds between loops if there's no other need
 next_pulse = ref 0.0
 
 def dj_looper() =
-    next_pulse := !default_pulse
+    next_pulse := default_pulse
     now = gettimeofday()
-    #FIXME instant switchover for now... go to soft switchover below
     if (now >= !next_scheduled_show_time) then
-        # only do this stuff if there's an actual show switch
-        # (could just be a day switchover from one show to the same show)
-        if (!next_scheduled_show_name != !current_scheduled_show_name) then
-            log("DJ LOOPER: Time for " ^ !next_scheduled_show_name ^ "!")
-            list.iter(source.shutdown, !current_show_source) # TODO I dunno why this works here but not in output_new_show
-            change_show_now(!next_scheduled_show_name)
+        if (!current_show_name == "") then # startup condition, or just recovery from a problem
+            update_current_next_shows()
+            log("DJ LOOPER: Starting up " ^ !current_scheduled_show_name)
+            change_show_now(!current_scheduled_show_name)
         end
-        # regardless, time to update what the current and next shows are
-        update_current_next_shows()
+        if (now >= !next_scheduled_show_time) then
+            log("DJ LOOPER: Coming up next... " ^ !next_scheduled_show_name)
+            change_show_trackend(!next_scheduled_show_name)
+            update_current_next_shows()
+        end
     end
-    # check if it's time to prepare for a show changeover on the next loop
-#    this_track_remaining = int_of_float(source.remaining(list.hd(default=blank(), !current_show_source)))
-#    if (now + this_track_remaining >= !next_scheduled_show_time) then
-#        # only set up the fade if we're actually changing shows
-#        if (!next_scheduled_show_name != !current_scheduled_show_name and !fadeout_trackend != true) then
-#            log("DJ LOOPER: Set fade-out to prepare for a new show...")
-#            change_show_trackend(!next_scheduled_show_name)
-#        end
-#    end
 
     !next_pulse
 end
 
 
 # kick off automatic show management
-
 # TODO: make initiating and halting the DJ control loop control board functions
 
-update_current_next_shows()
-output_new_show(!current_scheduled_show_name)
-log("Initiating DJ control loop.")
-add_timeout(3.0, dj_looper) #start it up!
+log("Initiating DJ LOOPER...")
+add_timeout(0.0, dj_looper) #start it up!
 
 
 

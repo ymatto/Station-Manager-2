@@ -194,6 +194,7 @@ trackend_command_queue = ref []
 
 def trackend_enqueue(command) =
     #FIXME dumb
+    log("Command received: " ^ string_of(command))
     trackend_command_queue := [command]
 end
 
@@ -217,6 +218,7 @@ def shutdown_output() =
 end
 
 def change_show_trackend(showname) =
+    log("change_show_trackend running: " ^ showname)
     if (list.assoc(default="error", showname, !show_paths) != "error") then
         set_fadeout_trackend(true)
         trackend_enqueue(["change_show_trackend_finish", showname])
@@ -226,12 +228,12 @@ def change_show_trackend(showname) =
 end
 
 def handle_track_end (offset, metadata) =
-    log("--- track change ---")
+    log("  - track change -")
     track_endtime := true # triggers the command_loop
 end
 
 def output_new_show (show_name) =
-    log("New show selected: " ^ show_name)
+    log("  ------ New show starting: " ^ show_name ^ " ------  ")
     show_path = list.assoc(default="error", show_name, !show_paths)
     show_source = playlist(id=show_name, show_path)
     output_source =
@@ -252,12 +254,14 @@ def output_new_show (show_name) =
 end
 
 def change_show_trackend_finish(showname) =
+    log("change_show_trackend_finish running: " ^ showname)
     shutdown_output() # Can't be within output_new_show for reasons I can't figure out
     output_new_show(showname)
     set_fadeout_trackend(false)
 end
 
 def change_show_now(showname) =
+    log("change_show_trackend_now running: " ^ showname)
     if (list.assoc(default="error", showname, !show_paths) != "error") then
         shutdown_output() # Can't be within output_new_show for reasons I can't figure out
         output_new_show(showname)
@@ -422,7 +426,7 @@ def update_current_next_shows () =
         next_scheduled_show_time := today_start_time + float_of_int(!next_scheduled_show_hour) * 3600.0
     else
         # okay, gotta use tomorrow's schedule...
-        log("Gotta use tomorrow's schedule for next show...")
+        log("    Checking tomorrow's schedule for next show...")
 
         #TODO: search for "daysofyear" types first
         tomorrows_indexed_dow_schedules = list.filter(find_tomorrows_dow_types, indexed_schedule_types)
@@ -441,8 +445,8 @@ def update_current_next_shows () =
         next_scheduled_show_hour := list.hd(default=0, !tomorrows_show_hours)
         next_scheduled_show_time := tomorrow_start_time + float_of_int(!next_scheduled_show_hour) * 3600.0
     end
-    log("Current show name updated:  " ^ !current_scheduled_show_name)
-    log("Next show name updated:     " ^ !next_scheduled_show_name)
+    log("    Current show name updated:  " ^ !current_scheduled_show_name)
+    log("    Next show name updated:     " ^ !next_scheduled_show_name)
 end
 
 
@@ -458,11 +462,11 @@ def dj_looper() =
     if (now >= !next_scheduled_show_time) then
         if (!current_show_name == "") then # startup condition, or just recovery from a problem
             update_current_next_shows()
-            log("DJ LOOPER: Starting up " ^ !current_scheduled_show_name)
+            log(" *** DJ LOOPER: Starting up " ^ !current_scheduled_show_name)
             change_show_now(!current_scheduled_show_name)
         end
         if (now >= !next_scheduled_show_time) then
-            log("DJ LOOPER: Coming up next... " ^ !next_scheduled_show_name)
+            log(" *** DJ LOOPER: Coming up next... " ^ !next_scheduled_show_name)
             change_show_trackend(!next_scheduled_show_name)
             update_current_next_shows()
         end
@@ -475,7 +479,7 @@ end
 # kick off automatic show management
 # TODO: make initiating and halting the DJ control loop control board functions
 
-log("Initiating DJ LOOPER...")
+log(" *** Initiating DJ LOOPER...")
 add_timeout(0.0, dj_looper) #start it up!
 
 

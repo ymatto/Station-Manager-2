@@ -2,6 +2,7 @@
 
 %include "passwords.liq"  # sets variable: icecastpassword
 
+set("server.telnet",true)
 
 # LOAD STATIONCONFIG
 
@@ -165,13 +166,14 @@ end
 # BUILD THE HARBOR SOURCE FOR SCHEDULED SHOW SWITCHING
 
 set("harbor.bind_addr","0.0.0.0")
-scheduled_source = input.harbor("broadcast-harbor", port=8033, password="ncr89nqenfihs997hfxa")
+scheduled_source = input.harbor(id="internal_input_harbor", "broadcast-harbor", port=8033, password="ncr89nqenfihs997hfxa")
 
-hout = output.icecast(%wav,
-      port = 8033,
-      host = "0.0.0.0",
-      mount = "broadcast-harbor",
-      password = "ncr89nqenfihs997hfxa") # TODO: randomly generate password for this?
+hout = output.icecast(
+    %wav,
+    port = 8033, # TODO: configurable?
+    host = "0.0.0.0",
+    mount = "broadcast-harbor",
+    password = "ncr89nqenfihs997hfxa" ) # TODO: randomly generate password for this?
 
 
 
@@ -235,7 +237,7 @@ end
 def output_new_show (show_name) =
     log("  ------ New show starting: " ^ show_name ^ " ------  ")
     show_path = list.assoc(default="error", show_name, !show_paths)
-    show_source = playlist(id=show_name, show_path)
+    show_source = playlist(id="scheduled_show_playlist", show_path)
     output_source =
         mksafe(
             crossfade(duration=5.0, #TODO make this (and offset below) a config parameter
@@ -248,7 +250,7 @@ def output_new_show (show_name) =
                 )
             )
         )
-    s = hout(output_source)
+    s = hout(id="scheduled_show_output", output_source)
     current_show_source := [s]
     current_show_name := show_name
 end
@@ -493,10 +495,11 @@ add_timeout(0.0, dj_looper) #start it up!
 broadcast_source = mksafe(on_metadata(logtrack, scheduled_source))
 
 # CREATE THE STREAM
-output.icecast(%mp3(bitrate=192),
-  host = station_host, port = station_port,
-  password = icecastpassword, mount = station_mount,
-  name = station_name,
-  description = station_description,
-  genre = station_genre,
-  url = station_url, broadcast_source)
+output.icecast(id="broadcast_output",
+    %mp3(bitrate=192),
+    host = station_host, port = station_port,
+    password = icecastpassword, mount = station_mount,
+    name = station_name,
+    description = station_description,
+    genre = station_genre,
+    url = station_url, broadcast_source)

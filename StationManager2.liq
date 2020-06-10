@@ -42,9 +42,9 @@ set("log.file.path",station_log_path)
 # LOAD SHOWCONFIG
 
 # TODO: For now just pulling a list of names for the sake of the currentShow.log, need to parse the rest
-# TODO: Probably build other lists other than show_longnames/paths here at some point.
 # TODO: Deal with failure-to-read better with thoughtful defaults and handling
 
+# TODO should do show_names here too, just as a convenient list of keys for the other lists
 show_paths = ref [] # ("Beats", "files/Instrumental Hip-Hop"), ("Groovestyle", "files/Stylish Background"), ...
 show_longnames = ref [] # ("Beats", "Straight Beats"), ("Groovestyle", "Groovestyle"), ...
 
@@ -52,13 +52,14 @@ showconfig_file = file.contents(station_showconfig_path)
 showconfig = of_json(default=[ ( "error" , [("no show found", "")] ) ], showconfig_file)
 
 def get_show(thisshow) =
-  thisshowkey = fst(thisshow)
+  thisshowkey = fst(thisshow) # TODO <-- AKA this_show_name, see note above
   thisshowdata = snd(thisshow)
 
   thisshowpath = list.assoc (default="error", "playlist_path", thisshowdata) # TODO: deal with failure better
   show_paths := list.append([(thisshowkey, "#{!station_playlists_root}#{thisshowpath}")], !show_paths)
   thisshowlongname = list.assoc (default="error", "show_longname", thisshowdata) # TODO: deal with failure better
   show_longnames := list.append([(thisshowkey, thisshowlongname)], !show_longnames)
+  # TODO other fields from json once relevant...
 end
 
 list.iter(get_show, showconfig)
@@ -71,7 +72,7 @@ list.iter(get_show, showconfig)
 # TODO: If no file configured, should be smart enough to just pull list of directories
 #       from station_playlists_root (if specified) and set reasonable defaults
 # TODO: Deal with failure-to-read better with thoughtful defaults and handling
-# TODO: Ultimately this should probably be in a func so the file can be re-read for updates?
+# TODO: Ultimately this should probably be in a func so it can be skipped, and so the file can be re-read for updates
 
 showschedule_types = ref [] # "daysofweek", "everyday", ...
 showschedule_days = ref [] # ["Mondays", "Wednesdays"], [""], ...
@@ -180,53 +181,73 @@ hout = output.icecast(
 
 
 # CONTROL BOARD
-# TODO: Allow injection of commands to be run in X seconds... can timestamp when
-#       it should run, and keep track of a "next timed command" that the command
-#       loop can check. With that, put a little delay before show switches, etc.
 
 current_show_name = ref ""
-current_show_source = ref [hout(blank())]
+current_show_source = ref [hout(blank())] # make sure the ref is explicitly an active_source
 
 fadeout_trackend = ref false
 fadeout_instant = ref false
 
 track_endtime = ref false
 
-trackend_command_queue = ref []
+trackend_command_queue = ref [] # [([commandname, arg], exec_delay), ...]
+timed_command_queue = ref [] # [([commandname, arg], exec_time), ...]
 
-def trackend_enqueue(command) =
-    #FIXME dumb
-    log("Command received: " ^ string_of(command))
-    trackend_command_queue := [command]
+# queue management functions
+
+def sort_command_queue_by_time(command_pair1, command_pair2) =
+    command_time1 = snd(command_pair1)
+    command_time2 = snd(command_pair2)
+    if (command_time1 > command_time2) then
+        1
+    elsif (command_time1 < command_time2) then
+        -1
+    else
+        0
+    end
 end
 
-def trackend_readqueue() =
-    #FIXME dumb
-    command = list.hd(default=[""], !trackend_command_queue)
-    trackend_command_queue := []
-    command
+def timed_enqueue(command, exec_delay) = # command (list), exec_delay (float, seconds)
+    now = gettimeofday()
+    command_time = now + exec_delay # needs to be ref to be visible within func below?
+    log("Command received: " ^ string_of(command) ^ " with execution set to " ^ string_of(exec_delay) ^ " seconds from now")
+    command_pair = [(command, command_time)] # timed queue uses absolute times for execution
+    timed_command_queue := list.append(!timed_command_queue, command_pair)
+    # now sort it by time so we can just look from the head of the list everywhere else
+    timed_command_queue := list.sort(sort_command_queue_by_time, !timed_command_queue)
+    log("timed command queue now: " ^ string_of(!timed_command_queue))
 end
 
-def set_fadeout_trackend (status) =
-    fadeout_trackend := status
+def trackend_enqueue(command, exec_delay) =
+    log("Command received: " ^ string_of(command) ^ " with execution delay: " ^ string_of(exec_delay))
+    command_pair = [(command, exec_delay)] # trackend queue uses a delay, which can be turned into a fixed time at track end
+    trackend_command_queue := list.append(!trackend_command_queue, command_pair)
 end
 
-def set_fadeout_instant (status) =
-    fadeout_instant := status
+# command-queueable functions
+
+def set_fadeout_trackend(arg) =
+    if (arg == "true") then
+        fadeout_trackend := true
+    elsif (arg == "false") then
+        fadeout_trackend := false
+    else
+        log("Bad arg to set_fadeout_trackend")
+    end
 end
+
+def set_fadeout_instant (arg) =
+    if (arg == "true") then
+        fadeout_instant := true
+    else
+        fadeout_instant := false
+    end
+end
+
+# show management functions (plus change_show queueable command)
 
 def shutdown_output() =
     list.iter(source.shutdown, !current_show_source)
-end
-
-def change_show_trackend(showname) =
-    log("change_show_trackend running: " ^ showname)
-    if (list.assoc(default="error", showname, !show_paths) != "error") then
-        set_fadeout_trackend(true)
-        trackend_enqueue(["change_show_trackend_finish", showname])
-    else
-        log("No playlist path specified for requested show: " ^ showname)
-    end
 end
 
 def handle_track_end (offset, metadata) =
@@ -255,36 +276,77 @@ def output_new_show (show_name) =
     current_show_name := show_name
 end
 
-def change_show_trackend_finish(showname) =
-    log("change_show_trackend_finish running: " ^ showname)
-    shutdown_output() # Can't be within output_new_show for reasons I can't figure out
-    output_new_show(showname)
-    set_fadeout_trackend(false)
-end
-
-def change_show_now(showname) =
-    log("change_show_trackend_now running: " ^ showname)
+def change_show(showname) =
+    log("change_show running: " ^ showname)
     if (list.assoc(default="error", showname, !show_paths) != "error") then
         shutdown_output() # Can't be within output_new_show for reasons I can't figure out
         output_new_show(showname)
     else
         log("No playlist path specified for requested show: " ^ showname)
     end
+    set_fadeout_trackend("false") # TODO Does this always running cause any problems?
 end
 
-def command_loop() =
-    if (!track_endtime) then
-        if (list.length(!trackend_command_queue) > 0) then
-            # FIXME: write a real trackend queue handler
-            command = trackend_readqueue()
-            commandname = list.hd(default="", command)
-            commandarg = list.nth(default="", command, 1)
-            log("processing command: " ^ commandname ^ " - with argument: " ^ commandarg)
-            if (commandname == "change_show_trackend_finish") then
-                change_show_trackend_finish(commandarg)
-            end
+# queue execution functions
+
+def execute_a_command(command) =
+    command_name = list.hd(default="", command)
+    command_arg = list.nth(default="", command, 1)
+    log("processing command: " ^ command_name ^ " - with argument: " ^ command_arg)
+    if (command_name == "change_show") then
+        change_show(command_arg)
+    elsif (command_name == "set_fadeout_trackend") then
+        set_fadeout_trackend(command_arg)
+    elsif (command_name == "set_fadeout_instant") then
+        set_fadeout_instant(command_arg)
+    end
+    #FIXME moar commands
+end
+
+def process_timed_command_queue() =
+    now = gettimeofday()
+    def process_commands(this_command_pair) =
+        this_command = fst(this_command_pair)
+        this_command_time = snd(this_command_pair)
+        if (this_command_time <= now) then
+            execute_a_command(this_command)
+            false # done, doesn't get saved in the updated list
+        else
+            true
         end
-        track_endtime := false
+    end
+    timed_command_queue := list.filter(process_commands, !timed_command_queue) # updated queue
+end
+
+def process_trackend_command_queue() =
+    def process_commands (this_command_pair) =
+        this_command = fst(this_command_pair)
+        this_command_delay = snd(this_command_pair)
+        if (this_command_delay <= 0.0) then
+            # do it now!
+            execute_a_command(this_command)
+        else
+            # inject commands with non-zero delay into timed queue
+            timed_enqueue(this_command, this_command_delay)
+        end
+        false # just return an empty queue to the filter for now... unless there's some reason for leave something there?
+    end
+    if (list.length(!trackend_command_queue) > 0) then
+        trackend_command_queue := list.filter(process_commands, !trackend_command_queue) # will just be cleared out
+    end
+    track_endtime := false # reset and start waiting for next trackend
+end
+
+# loop that executes commands out of queues at the proper time
+
+def command_loop() =
+    now = gettimeofday()
+    if (!track_endtime) then
+        process_trackend_command_queue()
+    end
+    next_timed_command_time = snd(list.hd(default=(["", ""], 0.0), !timed_command_queue))
+    if (now >= next_timed_command_time and next_timed_command_time != 0.0) then
+        process_timed_command_queue()
     end
     0.1
 end
@@ -388,7 +450,7 @@ def is_prior_hour(listpair) =
 end
 
 def update_current_next_shows () =
-    log("Updating current and next shows...")
+    log("Updating current and next scheduled shows...")
     todays_schedule_index = ref 0
     todays_show_names = ref []
     todays_show_hours = ref [0]
@@ -447,8 +509,8 @@ def update_current_next_shows () =
         next_scheduled_show_hour := list.hd(default=0, !tomorrows_show_hours)
         next_scheduled_show_time := tomorrow_start_time + float_of_int(!next_scheduled_show_hour) * 3600.0
     end
-    log("    Current show name updated:  " ^ !current_scheduled_show_name)
-    log("    Next show name updated:     " ^ !next_scheduled_show_name)
+    log("    Current show:  " ^ !current_scheduled_show_name)
+    log("    Next show:     " ^ !next_scheduled_show_name)
 end
 
 
@@ -465,11 +527,12 @@ def dj_looper() =
         if (!current_show_name == "") then # startup condition, or just recovery from a problem
             update_current_next_shows()
             log(" *** DJ LOOPER: Starting up " ^ !current_scheduled_show_name)
-            change_show_now(!current_scheduled_show_name)
+            timed_enqueue(["change_show", !current_scheduled_show_name], 0.0)
         end
         if (now >= !next_scheduled_show_time) then
             log(" *** DJ LOOPER: Coming up next... " ^ !next_scheduled_show_name)
-            change_show_trackend(!next_scheduled_show_name)
+            timed_enqueue(["set_fadeout_trackend", "true"], 0.0)
+            trackend_enqueue(["change_show", !next_scheduled_show_name], 3.0)
             update_current_next_shows()
         end
     end

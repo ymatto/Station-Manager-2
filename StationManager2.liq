@@ -219,7 +219,7 @@ def timed_enqueue(command, exec_delay) = # command (list), exec_delay (float, se
 end
 
 def trackend_enqueue(command, exec_delay) =
-    log("Command received: " ^ string_of(command) ^ " with execution delay: " ^ string_of(exec_delay))
+    log("Command received: " ^ string_of(command) ^ " with execution delay: " ^ string_of(exec_delay) ^ " from end of track")
     command_pair = [(command, exec_delay)] # trackend queue uses a delay, which can be turned into a fixed time at track end
     trackend_command_queue := list.append(!trackend_command_queue, command_pair)
 end

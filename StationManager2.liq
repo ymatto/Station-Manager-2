@@ -300,7 +300,7 @@ def execute_a_command(command) =
     elsif (command_name == "set_fadeout_instant") then
         set_fadeout_instant(command_arg)
     end
-    #FIXME moar commands
+    #TODO moar commands
 end
 
 def process_timed_command_queue() =
@@ -352,6 +352,64 @@ def command_loop() =
 end
 
 add_timeout(0.1, command_loop)
+
+
+# SERVER FUNCTIONS
+
+def cb_trackend_enqueue (input_string) =
+    command_name = ref ""
+    command_arg = ref ""
+    command_time = ref 0.0
+    command_list = string.split(separator=" ", input_string)
+    command_length = list.length(command_list)
+    if (command_length > 0) then
+        command_name := list.nth(default="", command_list, 0)
+        if (command_length > 1) then
+            command_arg := list.nth(default="", command_list, 1)
+            if (command_length > 2) then
+                command_time := float_of_string(list.nth(default="", command_list, 2))
+            end
+        end
+        trackend_enqueue([!command_name, !command_arg], !command_time)
+        "Done"
+    else
+        "No command provided"
+    end
+end
+
+def cb_timed_enqueue (input_string) =
+    command_name = ref ""
+    command_arg = ref ""
+    command_time = ref 0.0
+    command_list = string.split(separator=" ", input_string)
+    command_length = list.length(command_list)
+    if (command_length > 0) then
+        command_name := list.nth(default="", command_list, 0)
+        if (command_length > 1) then
+            command_arg := list.nth(default="", command_list, 1)
+            if (command_length > 2) then
+                command_time := float_of_string(list.nth(default="", command_list, 2))
+            end
+        end
+        timed_enqueue([!command_name, !command_arg], !command_time)
+        "Done"
+    else
+        "No command provided"
+    end
+end
+
+server.register(namespace="cb",
+                usage="trackend_enqueue <command> [<argument> <time>]",
+                description="Inserts a command into the queue to be run at at delay from track's end",
+                "trackend_enqueue",
+                cb_trackend_enqueue)
+
+server.register(namespace="cb",
+                usage="instant_enqueue <command> [<argument> <time>]",
+                description="Inserts a command into the queue to be run after a delay",
+                "timed_enqueue",
+                cb_timed_enqueue)
+
 
 
 

@@ -261,19 +261,24 @@ def handle_track_end (offset, metadata) =
     track_endtime := true # triggers the command_loop
 end
 
+#FIXME put in the right place
+playover_source = request.queue(id="playover_source")
+
 def output_new_show (show_name) =
     log("  ------ New show starting: " ^ show_name ^ " ------  ")
     show_path = list.assoc(default="error", show_name, !show_paths)
     show_source = playlist(id="scheduled_show_playlist", show_path)
     output_source =
         mksafe(
-            crossfade(duration=5.0, #TODO make this (and offset below) a config parameter? per show ideally?
-                on_offset(offset=5.0, handle_track_end, # should basically hit end of track
-                    switch( track_sensitive=false, [ ({!fadeout_instant == true}, blank()), ({true},
-                        switch( track_sensitive=true, [ ({!fadeout_trackend == true}, blank()), ({true},
-                            show_source
+            smooth_add(delay=0.5, p=0.2, special=playover_source, normal=
+                crossfade(duration=5.0, #TODO make this (and offset below) a config parameter? per show ideally?
+                    on_offset(offset=5.0, handle_track_end, # should basically hit end of track
+                        switch( track_sensitive=false, [ ({!fadeout_instant == true}, blank()), ({true},
+                            switch( track_sensitive=true, [ ({!fadeout_trackend == true}, blank()), ({true},
+                                show_source
+                            ) ] )
                         ) ] )
-                    ) ] )
+                    )
                 )
             )
         )

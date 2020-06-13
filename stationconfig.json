@@ -3,11 +3,11 @@
   "output_encoding": "mp3_192k",
   "spoken_ID": "This is Bass Cadet.",
   "currentshow_path": "currentShow.log",
-  "url": "http://basscadet.net:8000/",
+  "url": "http://basscadet.net:8000/basscadettest.mp3",
   "icecast_password": "GUEvoN3gKVKc9vwW",
   "host": "localhost",
   "log_path": "/tmp/StationManager2_test.log",
-  "harbor_port": 8050,
+  "harbor_port": 8051,
   "telnet_server": true,
   "telnet_server_netmask": "127.0.0.1",
   "harbor_password": "mjMrG5gNK8o9225Q",
@@ -19,6 +19,6 @@
   "port": 8000,
   "telnet_server_timeout": 300,
   "genre": "Electronic & Hip-Hop",
-  "telnet_server_port": 1337,
+  "telnet_server_port": 1338,
   "description": "An electic mix of Electronic and Hip-Hop tracks"
 }

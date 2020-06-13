@@ -1,8 +1,6 @@
 #!/Users/omm/.opam/default/bin/liquidsoap -v
 
-%include "passwords.liq"  # sets variable: icecastpassword
-
-set("server.telnet",true)
+%include "passwords.liq"  # sets variable: icecastpassword FIXME put it in the stationconfig
 
 # LOAD STATIONCONFIG
 
@@ -36,7 +34,10 @@ station_showschedule_path = station_config_strings["showschedule_path"]
 # Log dir
 set("log.file.path",station_log_path)
 
-
+#FIXME make these config options
+# set("server.telnet",true)
+# set("server.telnet.port", 1337)
+# set("server.timeout", 300.0) # negative value disables timeout
 
 
 # LOAD SHOWCONFIG
@@ -121,7 +122,6 @@ list.iter(get_showschedule_intlists, showschedule_intlist_pairs)
 
 # FUNCTIONS TO UPDATE LOG DATA ON NEW METADATA
 
-currentshow_logname = ref ""
 recent_tracks = ref []
 new_tracklog = ref ""
 
@@ -146,18 +146,6 @@ def logtrack(metadata) =
       station_tracklog_path
     )
   )
-  newshow = "#{metadata[\"source\"]}"
-  oldshow = !currentshow_logname
-  if newshow != oldshow then
-    currentshow_logname := newshow
-    ignore(
-      file.write(
-        data=list.assoc(default="", newshow, !show_longnames),
-        append=false,
-        station_currentshow_path
-      )
-    )
-  end
 end
 
 
@@ -167,11 +155,11 @@ end
 # BUILD THE HARBOR SOURCE FOR SCHEDULED SHOW SWITCHING
 
 set("harbor.bind_addr","0.0.0.0")
-scheduled_source = input.harbor(id="internal_input_harbor", "broadcast-harbor", port=8033, password="ncr89nqenfihs997hfxa")
+scheduled_source = input.harbor(id="internal_input_harbor", "broadcast-harbor", port=8034, password="ncr89nqenfihs997hfxa")
 
 hout = output.icecast(
     %wav,
-    port = 8033, # TODO: configurable?
+    port = 8034, # FIXME: configurable!
     host = "0.0.0.0",
     mount = "broadcast-harbor",
     password = "ncr89nqenfihs997hfxa" ) # TODO: randomly generate password for this?
@@ -274,6 +262,14 @@ def output_new_show (show_name) =
     s = hout(id="scheduled_show_output", output_source)
     current_show_source := [s]
     current_show_name := show_name
+    current_show_longname = list.assoc(default="", show_name, !show_longnames)
+    ignore(
+        file.write(
+                data=current_show_longname,
+                append=false,
+                station_currentshow_path
+            )
+    )
 end
 
 def change_show(showname) =

@@ -1,16 +1,20 @@
 #!/Users/omm/.opam/default/bin/liquidsoap -v
 
-%include "passwords.liq"  # sets variable: icecastpassword FIXME put it in the stationconfig
 
 # LOAD STATIONCONFIG
+
+# TODO: Halt script if certain minimum things aren't set?
 
 stationconfig_file = file.contents(argv(default="", 1)) # TODO: allow script to proceed with defaults without argv?
 station_config_strings = of_json(default=[("error", "no station config")], stationconfig_file)
 station_config_ints = of_json(default=[("", 0)], stationconfig_file)
+station_config_bools = of_json(default=[("", false)], stationconfig_file)
 
 if station_config_strings["error"] == "no station config" then
   log("station config invalid")
 end
+
+%include "encoding_formats.liq"
 
 # TODO: These should  all use list.assoc to have specified defaults when not specified in config file
 station_name = station_config_strings["name"]
@@ -19,25 +23,35 @@ station_description = station_config_strings["description"]
 station_log_path = station_config_strings["log_path"]
 station_tracklog_path = station_config_strings["tracklog_path"]
 station_currentshow_path = station_config_strings["currentshow_path"]
-# station_output_encoding = station_config_strings["currentshow_encoding"]
-# station_output_bitrate = list.assoc(default=192, "bitrate", station_config_ints)
-# station_format = # ... TODO: Have defined list of "formats" to specify from
-station_host = station_config_strings["host"]
+station_output_encoding = list.assoc(default=%mp3, list.assoc(default="mp3_128", "output_encoding", station_config_strings), encoding_formats)
+station_host = list.assoc(default="localhost", "host", station_config_strings)
 station_port = list.assoc(default=8000, "port", station_config_ints)
-station_mount = station_config_strings["mount"]
-station_genre = station_config_strings["genre"]
-station_url = station_config_strings["url"]
+station_mount = list.assoc(default="radio.mp3", "mount", station_config_strings)
+station_genre = list.assoc(default="", "genre", station_config_strings)
+station_url = list.assoc(default="", "url", station_config_strings)
 station_playlists_root = ref station_config_strings["playlists_root"] # FIX: better way than using ref?
 station_showconfig_path = station_config_strings["showconfig_path"]
 station_showschedule_path = station_config_strings["showschedule_path"]
+station_icecast_password = station_config_strings["icecast_password"]
+station_telnet_server = list.assoc(default=false, "telnet_server", station_config_bools)
+station_telnet_server_port = list.assoc(default=1234, "telnet_server_port", station_config_ints)
+station_telnet_server_timeout = float_of_int(list.assoc(default=30, "telnet_server_timeout", station_config_ints))
+station_telnet_server_netmask = list.assoc(default="0.0.0.0", "telnet_server_netmask", station_config_strings)
+station_harbor_port = list.assoc(default=station_port+10, "harbor_port", station_config_ints)
+station_harbor_password = list.assoc(default=station_icecast_password^string_of(random.int()), "harbor_password", station_config_strings)
 
-# Log dir
+# Logs setup
 set("log.file.path",station_log_path)
 
-#FIXME make these config options
-# set("server.telnet",true)
-# set("server.telnet.port", 1337)
-# set("server.timeout", 300.0) # negative value disables timeout
+# Server setup
+if (station_telnet_server) then
+    set("server.telnet", station_telnet_server)
+    set("server.telnet.port", station_telnet_server_port)
+    set("server.telnet.bind_addr", station_telnet_server_netmask)
+    set("server.timeout", station_telnet_server_timeout) # negative value disables timeout
+end
+
+
 
 
 # LOAD SHOWCONFIG
@@ -155,14 +169,18 @@ end
 # BUILD THE HARBOR SOURCE FOR SCHEDULED SHOW SWITCHING
 
 set("harbor.bind_addr","0.0.0.0")
-scheduled_source = input.harbor(id="internal_input_harbor", "broadcast-harbor", port=8034, password="ncr89nqenfihs997hfxa")
+scheduled_source = input.harbor(
+    id="internal_input_harbor",
+    "broadcast-harbor",
+    port=station_harbor_port,
+    password=station_harbor_password )
 
 hout = output.icecast(
     %wav,
-    port = 8034, # FIXME: configurable!
+    port = station_harbor_port,
     host = "0.0.0.0",
     mount = "broadcast-harbor",
-    password = "ncr89nqenfihs997hfxa" ) # TODO: randomly generate password for this?
+    password = station_harbor_password )
 
 
 
@@ -249,7 +267,7 @@ def output_new_show (show_name) =
     show_source = playlist(id="scheduled_show_playlist", show_path)
     output_source =
         mksafe(
-            crossfade(duration=5.0, #TODO make this (and offset below) a config parameter
+            crossfade(duration=5.0, #TODO make this (and offset below) a config parameter? per show ideally?
                 on_offset(offset=5.0, handle_track_end, # should basically hit end of track
                     switch( track_sensitive=false, [ ({!fadeout_instant == true}, blank()), ({true},
                         switch( track_sensitive=true, [ ({!fadeout_trackend == true}, blank()), ({true},
@@ -613,9 +631,9 @@ broadcast_source = mksafe(on_metadata(logtrack, scheduled_source))
 
 # CREATE THE STREAM
 output.icecast(id="broadcast_output",
-    %mp3(bitrate=192),
+    station_output_encoding,
     host = station_host, port = station_port,
-    password = icecastpassword, mount = station_mount,
+    password = station_icecast_password, mount = station_mount,
     name = station_name,
     description = station_description,
     genre = station_genre,

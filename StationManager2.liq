@@ -146,20 +146,21 @@ def addtotracklog(nexttrack) =
 end
 
 def logtrack(metadata) =
-  newline="#{metadata[\"artist\"]} - #{metadata[\"album\"]} - #{metadata[\"title\"]}"
-  recent_tracks := list.add(newline, !recent_tracks)
-  if (list.length(!recent_tracks) > 20) then
-    recent_tracks := list.rev(list.tl(list.rev(!recent_tracks)))
-  end
-  new_tracklog := ""
-  list.iter(addtotracklog, !recent_tracks)
-  ignore(
-    file.write(
-      data=!new_tracklog,
-      append=false,
-      station_tracklog_path
+    #FIXME don't log if the info is blank or "-" or whatever at show changes
+    newline="#{metadata[\"artist\"]} - #{metadata[\"album\"]} - #{metadata[\"title\"]}"
+    recent_tracks := list.add(newline, !recent_tracks)
+    if (list.length(!recent_tracks) > 20) then
+        recent_tracks := list.rev(list.tl(list.rev(!recent_tracks)))
+    end
+    new_tracklog := ""
+    list.iter(addtotracklog, !recent_tracks)
+    ignore(
+        file.write(
+            data=!new_tracklog,
+            append=false,
+            station_tracklog_path
+        )
     )
-  )
 end
 
 
@@ -261,13 +262,22 @@ def handle_track_end (offset, metadata) =
     track_endtime := true # triggers the command_loop
 end
 
+
 #FIXME put in the right place
-playover_source = request.queue(id="playover_source")
+playover_source = audio_to_stereo(request.queue(id="playover_source"))
+
+# def sayit (text) =
+#    print(run_process("say -o test.aiff -v daniel " ^ text))
+#    say -o voicetest.wav --data-format=LEI16@44100 --channels=2 -v Daniel "[[ slnc 3000 ]]You are listening to 'Bass Cadet One.'"
+#   server.execute... to reuqest.queue
+# end
+
 
 def output_new_show (show_name) =
     log("  ------ New show starting: " ^ show_name ^ " ------  ")
     show_path = list.assoc(default="error", show_name, !show_paths)
     show_source = playlist(id="scheduled_show_playlist", show_path)
+    # FIXME maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
     output_source =
         mksafe(
             smooth_add(delay=0.5, p=0.2, special=playover_source, normal=
@@ -318,6 +328,8 @@ def execute_a_command(command) =
         set_fadeout_trackend(command_arg)
     elsif (command_name == "set_fadeout_instant") then
         set_fadeout_instant(command_arg)
+#    elsif (command_name == "sayit") then # FIXME check it
+#        sayit(command_arg)
     end
     #TODO moar commands
 end

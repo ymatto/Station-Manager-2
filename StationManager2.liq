@@ -266,11 +266,10 @@ end
 #FIXME put in the right place
 playover_source = audio_to_stereo(request.queue(id="playover_source"))
 
-# def sayit (text) =
-#    print(run_process("say -o test.aiff -v daniel " ^ text))
-#    say -o voicetest.wav --data-format=LEI16@44100 --channels=2 -v Daniel "[[ slnc 3000 ]]You are listening to 'Bass Cadet One.'"
-#   server.execute... to reuqest.queue
-# end
+def mac_say (text) =
+    print(run_process("say -o voicetest.wav --data-format=LEI16@44100 --channels=2 -v Daniel \"[[ slnc 3000 ]] " ^ text ^ " \""))
+    print(server.execute("playover_source.push voicetest.wav"))
+end
 
 
 def output_new_show (show_name) =
@@ -328,8 +327,8 @@ def execute_a_command(command) =
         set_fadeout_trackend(command_arg)
     elsif (command_name == "set_fadeout_instant") then
         set_fadeout_instant(command_arg)
-#    elsif (command_name == "sayit") then # FIXME check it
-#        sayit(command_arg)
+    elsif (command_name == "mac_say") then
+        mac_say(command_arg)
     end
     #TODO moar commands
 end
@@ -388,18 +387,26 @@ add_timeout(0.1, command_loop)
 # SERVER FUNCTIONS
 
 def cb_trackend_enqueue (input_string) =
+    trimmed_input = string.trim(input_string)
     command_name = ref ""
     command_arg = ref ""
     command_time = ref 0.0
-    command_list = string.split(separator=" ", input_string)
-    command_length = list.length(command_list)
-    if (command_length > 0) then
-        command_name := list.nth(default="", command_list, 0)
-        if (command_length > 1) then
-            command_arg := list.nth(default="", command_list, 1)
-            if (command_length > 2) then
-                command_time := float_of_string(list.nth(default="", command_list, 2))
-            end
+    input_list = string.split(separator=" ", trimmed_input)
+    input_list_length = list.length(input_list)
+    input_length = string.length(trimmed_input)
+    if (input_list_length > 0) then
+        command_name := list.nth(default="", input_list, 0)
+        last_input = list.nth(default="", input_list, input_list_length-1)
+        last_input_as_float = float_of_string(default=-1.0, last_input)
+        command_name_length = string.length(!command_name)
+        if (last_input_as_float >= 0.0) then
+            command_time := last_input_as_float
+            command_time_length = string.length(last_input)
+            # command_arg is everything between command (at start) and time (at end)
+            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
+        else
+            # command_arg is everything after command (at start)
+            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
         end
         trackend_enqueue([!command_name, !command_arg], !command_time)
         "Done"
@@ -408,19 +415,27 @@ def cb_trackend_enqueue (input_string) =
     end
 end
 
-def cb_timed_enqueue (input_string) =
+def cb_timed_enqueue (input_string) = # TODO near-complete code duplication from cb_trackend_enque above, gross
+    trimmed_input = string.trim(input_string)
     command_name = ref ""
     command_arg = ref ""
     command_time = ref 0.0
-    command_list = string.split(separator=" ", input_string)
-    command_length = list.length(command_list)
-    if (command_length > 0) then
-        command_name := list.nth(default="", command_list, 0)
-        if (command_length > 1) then
-            command_arg := list.nth(default="", command_list, 1)
-            if (command_length > 2) then
-                command_time := float_of_string(list.nth(default="", command_list, 2))
-            end
+    input_list = string.split(separator=" ", trimmed_input)
+    input_list_length = list.length(input_list)
+    input_length = string.length(trimmed_input)
+    if (input_list_length > 0) then
+        command_name := list.nth(default="", input_list, 0)
+        last_input = list.nth(default="", input_list, input_list_length-1)
+        last_input_as_float = float_of_string(default=-1.0, last_input)
+        command_name_length = string.length(!command_name)
+        if (last_input_as_float >= 0.0) then
+            command_time := last_input_as_float
+            command_time_length = string.length(last_input)
+            # command_arg is everything between command (at start) and time (at end)
+            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
+        else
+            # command_arg is everything after command (at start)
+            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
         end
         timed_enqueue([!command_name, !command_arg], !command_time)
         "Done"
@@ -430,13 +445,13 @@ def cb_timed_enqueue (input_string) =
 end
 
 server.register(namespace="cb",
-                usage="trackend_enqueue <command> [<argument> <time>]",
+                usage="trackend_enqueue <command> [<argument>] [<time>]",
                 description="Inserts a command into the queue to be run at at delay from track's end",
                 "trackend_enqueue",
                 cb_trackend_enqueue)
 
 server.register(namespace="cb",
-                usage="instant_enqueue <command> [<argument> <time>]",
+                usage="timed_enqueue <command> [<argument>] [<time>]",
                 description="Inserts a command into the queue to be run after a delay",
                 "timed_enqueue",
                 cb_timed_enqueue)

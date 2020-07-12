@@ -16,10 +16,13 @@ end
 
 %include "encoding_formats.liq"
 
-# TODO: These should  all use list.assoc to have specified defaults when not specified in config file
+# TODO: These should all use list.assoc to have specified defaults when not specified in config file
+# FIXME: These should all be refs so that a new config file can be loaded runtime, and so they're okay even if not used
 station_name = station_config_strings["name"]
 station_description = station_config_strings["description"]
 # station_spoken_ID = station_config_strings["spoken_ID"]
+station_voice_type = station_config_strings["voice_type"]
+station_default_voice = station_config_strings["default_voice"]
 station_log_path = station_config_strings["log_path"]
 station_tracklog_path = station_config_strings["tracklog_path"]
 station_currentshow_path = station_config_strings["currentshow_path"]
@@ -62,6 +65,7 @@ end
 # TODO should do show_names here too, just as a convenient list of keys for the other lists
 show_paths = ref [] # ("Beats", "files/Instrumental Hip-Hop"), ("Groovestyle", "files/Stylish Background"), ...
 show_longnames = ref [] # ("Beats", "Straight Beats"), ("Groovestyle", "Groovestyle"), ...
+show_voices = ref [] # ("Beats", "Whisper"), ("Groovestyle", "Ava"), ...
 
 showconfig_file = file.contents(station_showconfig_path)
 showconfig = of_json(default=[ ( "error" , [("no show found", "")] ) ], showconfig_file)
@@ -74,6 +78,8 @@ def get_show(thisshow) =
   show_paths := list.append([(thisshowkey, "#{!station_playlists_root}#{thisshowpath}")], !show_paths)
   thisshowlongname = list.assoc (default="error", "show_longname", thisshowdata) # TODO: deal with failure better
   show_longnames := list.append([(thisshowkey, thisshowlongname)], !show_longnames)
+  thisshowDJvoice = list.assoc (default="error", "DJ_voice", thisshowdata)
+  show_voices := list.append([(thisshowkey, thisshowDJvoice)], !show_voices)
   # TODO other fields from json once relevant...
 end
 
@@ -191,6 +197,7 @@ hout = output.icecast(
 
 current_show_name = ref ""
 current_show_source = ref [hout(blank())] # make sure the ref is explicitly an active_source
+current_voice = ref ""
 
 fadeout_trackend = ref false
 fadeout_instant = ref false
@@ -229,6 +236,7 @@ def trackend_enqueue(command, exec_delay) =
     log("Command received: " ^ string_of(command) ^ " with execution delay: " ^ string_of(exec_delay) ^ " from end of track")
     command_pair = [(command, exec_delay)] # trackend queue uses a delay, which can be turned into a fixed time at track end
     trackend_command_queue := list.append(!trackend_command_queue, command_pair)
+    log("trackend command queue now: " ^ string_of(!trackend_command_queue))
 end
 
 # command-queueable functions
@@ -251,6 +259,40 @@ def set_fadeout_instant (arg) =
     end
 end
 
+# DJ speech functions
+
+playover_source = audio_to_stereo(request.queue(id="playover_source"))
+
+def set_voice (voicename) =
+    newvoice = ref ""
+    if (voicename == "normal") then
+        newvoice := station_default_voice
+        showvoice = list.assoc(default="", !current_show_name, !show_voices)
+        if (showvoice != "") then
+            newvoice := showvoice
+        end
+    else
+        newvoice := voicename
+    end
+    current_voice := !newvoice
+    log("New voice selected: " ^ !newvoice)
+end
+
+def dj_say (text) =
+    speech_filename = file.temp("SM2_speech_", ".wav")
+    if (!current_voice == "") then
+        log("No voice configured. Say ignored.")
+    else
+        if (station_voice_type == "mac") then
+            command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v " ^ !current_voice ^ " \"[[ slnc 3000 ]] " ^ text ^ " \""
+            ignore(run_process(command_string))
+            ignore(server.execute("playover_source.push " ^ speech_filename)) # TODO Likely will change in later version of LiquidSoap
+        else
+            log("Station voice_type not set to supported speech synthesizer. Say ignored.")
+        end
+    end
+end
+
 # show management functions (plus change_show queueable command)
 
 def shutdown_output() =
@@ -262,16 +304,6 @@ def handle_track_end (offset, metadata) =
     track_endtime := true # triggers the command_loop
 end
 
-
-#FIXME put in the right place
-playover_source = audio_to_stereo(request.queue(id="playover_source"))
-
-def mac_say (text) =
-    print(run_process("say -o voicetest.wav --data-format=LEI16@44100 --channels=2 -v Daniel \"[[ slnc 3000 ]] " ^ text ^ " \""))
-    print(server.execute("playover_source.push voicetest.wav"))
-end
-
-
 def output_new_show (show_name) =
     log("  ------ New show starting: " ^ show_name ^ " ------  ")
     show_path = list.assoc(default="error", show_name, !show_paths)
@@ -279,7 +311,7 @@ def output_new_show (show_name) =
     # FIXME maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
     output_source =
         mksafe(
-            smooth_add(delay=0.5, p=0.2, special=playover_source, normal=
+            smooth_add(delay=0.5, p=0.1, special=playover_source, normal=
                 crossfade(duration=5.0, #TODO make this (and offset below) a config parameter? per show ideally?
                     on_offset(offset=5.0, handle_track_end, # should basically hit end of track
                         switch( track_sensitive=false, [ ({!fadeout_instant == true}, blank()), ({true},
@@ -293,15 +325,6 @@ def output_new_show (show_name) =
         )
     s = hout(id="scheduled_show_output", output_source)
     current_show_source := [s]
-    current_show_name := show_name
-    current_show_longname = list.assoc(default="", show_name, !show_longnames)
-    ignore(
-        file.write(
-                data=current_show_longname,
-                append=false,
-                station_currentshow_path
-            )
-    )
 end
 
 def change_show(showname) =
@@ -309,6 +332,16 @@ def change_show(showname) =
     if (list.assoc(default="error", showname, !show_paths) != "error") then
         shutdown_output() # Can't be within output_new_show for reasons I can't figure out
         output_new_show(showname)
+        current_show_name := showname
+        current_show_longname = list.assoc(default="", showname, !show_longnames)
+        set_voice("normal")
+        ignore(
+            file.write(
+                    data=current_show_longname,
+                    append=false,
+                    station_currentshow_path
+                )
+        )
     else
         log("No playlist path specified for requested show: " ^ showname)
     end
@@ -327,8 +360,10 @@ def execute_a_command(command) =
         set_fadeout_trackend(command_arg)
     elsif (command_name == "set_fadeout_instant") then
         set_fadeout_instant(command_arg)
-    elsif (command_name == "mac_say") then
-        mac_say(command_arg)
+    elsif (command_name == "dj_say") then
+        dj_say(command_arg)
+    elsif (command_name == "set_voice") then
+        set_voice(command_arg)
     end
     #TODO moar commands
 end

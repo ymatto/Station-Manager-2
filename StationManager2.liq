@@ -421,7 +421,7 @@ add_timeout(0.1, command_loop)
 
 # SERVER FUNCTIONS
 
-def cb_trackend_enqueue (input_string) =
+def req_trackend_enqueue (input_string) =
     trimmed_input = string.trim(input_string)
     command_name = ref ""
     command_arg = ref ""
@@ -450,7 +450,7 @@ def cb_trackend_enqueue (input_string) =
     end
 end
 
-def cb_timed_enqueue (input_string) = # TODO near-complete code duplication from cb_trackend_enque above, gross
+def req_timed_enqueue (input_string) = # TODO near-complete code duplication from req_trackend_enque above, gross
     trimmed_input = string.trim(input_string)
     command_name = ref ""
     command_arg = ref ""
@@ -479,17 +479,17 @@ def cb_timed_enqueue (input_string) = # TODO near-complete code duplication from
     end
 end
 
-server.register(namespace="cb",
+server.register(namespace="req",
                 usage="trackend_enqueue <command> [<argument>] [<time>]",
                 description="Inserts a command into the queue to be run at at delay from track's end",
-                "trackend_enqueue",
-                cb_trackend_enqueue)
+                "trackend",
+                req_trackend_enqueue)
 
-server.register(namespace="cb",
+server.register(namespace="req",
                 usage="timed_enqueue <command> [<argument>] [<time>]",
                 description="Inserts a command into the queue to be run after a delay",
-                "timed_enqueue",
-                cb_timed_enqueue)
+                "now",
+                req_timed_enqueue)
 
 
 

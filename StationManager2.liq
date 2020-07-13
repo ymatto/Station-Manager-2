@@ -17,10 +17,10 @@ end
 %include "encoding_formats.liq"
 
 # TODO: These should all use list.assoc to have specified defaults when not specified in config file
-# FIXME: These should all be refs so that a new config file can be loaded runtime, and so they're okay even if not used
+# TODO: These should all be refs so that a new config file can be loaded runtime, and so they're okay even if not used
 station_name = station_config_strings["name"]
 station_description = station_config_strings["description"]
-# station_spoken_ID = station_config_strings["spoken_ID"]
+station_spoken_ID = station_config_strings["spoken_ID"]
 station_voice_type = station_config_strings["voice_type"]
 station_default_voice = station_config_strings["default_voice"]
 station_log_path = station_config_strings["log_path"]
@@ -66,6 +66,9 @@ end
 show_paths = ref [] # ("Beats", "files/Instrumental Hip-Hop"), ("Groovestyle", "files/Stylish Background"), ...
 show_longnames = ref [] # ("Beats", "Straight Beats"), ("Groovestyle", "Groovestyle"), ...
 show_voices = ref [] # ("Beats", "Whisper"), ("Groovestyle", "Ava"), ...
+show_signons = ref []
+show_signoffs = ref []
+show_shufflemodes = ref []
 
 showconfig_file = file.contents(station_showconfig_path)
 showconfig = of_json(default=[ ( "error" , [("no show found", "")] ) ], showconfig_file)
@@ -78,9 +81,14 @@ def get_show(thisshow) =
   show_paths := list.append([(thisshowkey, "#{!station_playlists_root}#{thisshowpath}")], !show_paths)
   thisshowlongname = list.assoc (default="error", "show_longname", thisshowdata) # TODO: deal with failure better
   show_longnames := list.append([(thisshowkey, thisshowlongname)], !show_longnames)
-  thisshowDJvoice = list.assoc (default="error", "DJ_voice", thisshowdata)
+  thisshowDJvoice = list.assoc (default="", "DJ_voice", thisshowdata)
   show_voices := list.append([(thisshowkey, thisshowDJvoice)], !show_voices)
-  # TODO other fields from json once relevant...
+  thissignon = list.assoc (default="", "signon", thisshowdata)
+  show_signons := list.append([(thisshowkey, thissignon)], !show_signons)
+  thissignoff = list.assoc (default="", "signoff", thisshowdata)
+  show_signoffs := list.append([(thisshowkey, thissignoff)], !show_signoffs)
+  thisshufflemode = list.assoc (default="songs", "shuffle_mode", thisshowdata) # TODO: make do something
+  show_shufflemodes := list.append([(thisshowkey, thisshufflemode)], !show_shufflemodes)
 end
 
 list.iter(get_show, showconfig)
@@ -286,6 +294,7 @@ def dj_say (text) =
         if (station_voice_type == "mac") then
             command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v " ^ !current_voice ^ " \"[[ slnc 3000 ]] " ^ text ^ " \""
             ignore(run_process(command_string))
+            log("SPEAKING [" ^ !current_voice ^ "]: " ^ text)
             ignore(server.execute("playover_source.push " ^ speech_filename)) # TODO Likely will change in later version of LiquidSoap
         else
             log("Station voice_type not set to supported speech synthesizer. Say ignored.")
@@ -497,7 +506,7 @@ server.register(namespace="req",
 
 # SET UP AUTOMATED HARBOR SOURCE CONTROL VIA SCHEDULE – AKA DJ LOOPER
 
-# time utilities
+# time functions
 
 def get_weekday_name(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
     daymapping = [
@@ -532,11 +541,22 @@ def get_time_since_midnight(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday,
     float_of_int(sec + (min * 60 + (hour * 3600)))
 end
 
+def get_time_since_last_hour(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
+    float_of_int(sec + (min * 60))
+end
+
 # returns the unixtime at midnight at the start of today
 def get_today_start_time() =
     now = gettimeofday()
     time_since_midnight = localtime(now, get_time_since_midnight)
     now - time_since_midnight
+end
+
+# returns the unixtime of the next hour mark (for now)
+def get_next_station_ID_time() = # TODO could be more configurable later rather than just hourly
+    now = gettimeofday()
+    time_since_last_hour = localtime(now, get_time_since_last_hour)
+    now - time_since_last_hour + (3600.0) # ie. next hour mark
 end
 
 
@@ -659,21 +679,35 @@ end
 default_pulse = 5.0 # seconds between loops if there's no other need
 next_pulse = ref 0.0
 
+next_station_ID_time = ref 0.0
+
 def dj_looper() =
     next_pulse := default_pulse
     now = gettimeofday()
     if (now >= !next_scheduled_show_time) then
         if (!current_show_name == "") then # startup condition, or just recovery from a problem
             update_current_next_shows()
-            log(" *** DJ LOOPER: Starting up " ^ !current_scheduled_show_name)
+            next_station_ID_time := get_next_station_ID_time()
+            log(" *** DJ LOOPER: Starting up with... " ^ !current_scheduled_show_name)
             timed_enqueue(["change_show", !current_scheduled_show_name], 0.0)
         end
         if (now >= !next_scheduled_show_time) then
             log(" *** DJ LOOPER: Coming up next... " ^ !next_scheduled_show_name)
             timed_enqueue(["set_fadeout_trackend", "true"], 0.0)
             trackend_enqueue(["change_show", !next_scheduled_show_name], 3.0)
+            next_signon = list.assoc(default=station_spoken_ID, !next_scheduled_show_name, !show_signons)
+            if (next_signon != "") then
+                trackend_enqueue(["dj_say", next_signon], 15.0)
+            end
             update_current_next_shows()
+            next_station_ID_time := get_next_station_ID_time()
         end
+    elsif (now >= !next_station_ID_time) then
+        if (station_spoken_ID != "") then
+            log(" *** DJ LOOPER: Time for a station ID. ")
+            trackend_enqueue(["dj_say", station_spoken_ID], 0.0) # TODO could make configurable to be immediate or trackend
+        end
+        next_station_ID_time := get_next_station_ID_time()
     end
 
     !next_pulse

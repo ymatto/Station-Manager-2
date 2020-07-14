@@ -160,7 +160,7 @@ def addtotracklog(nexttrack) =
 end
 
 def logtrack(metadata) =
-    #FIXME don't log if the info is blank or "-" or whatever at show changes
+    #TODO don't log if the info is blank or "-" or whatever at show changes
     newline="#{metadata[\"artist\"]} - #{metadata[\"album\"]} - #{metadata[\"title\"]}"
     recent_tracks := list.add(newline, !recent_tracks)
     if (list.length(!recent_tracks) > 20) then
@@ -204,7 +204,8 @@ hout = output.icecast(
 # CONTROL BOARD
 
 current_show_name = ref ""
-current_show_source = ref [hout(blank())] # make sure the ref is explicitly an active_source
+current_output_source = ref [hout(blank())] # make sure the ref is explicitly an active_source
+current_show_source = ref blank()
 current_voice = ref ""
 
 fadeout_trackend = ref false
@@ -212,17 +213,30 @@ fadeout_instant = ref false
 
 track_endtime = ref false
 
-trackend_command_queue = ref [] # [([commandname, arg], exec_delay), ...]
-timed_command_queue = ref [] # [([commandname, arg], exec_time), ...]
+timed_command_queue = ref [] # [([commandname, arg], exec_unixtime), ...]
+trackend_command_queue = ref [] # [([commandname, arg], exec_delay_after_trackend), ...]
+pre_trackend_command_queue = ref [] # [([commandname, arg], exec_time_before_trackend), ...]
 
 # queue management functions
 
-def sort_command_queue_by_time(command_pair1, command_pair2) =
+def sort_command_queue_by_time_ascending(command_pair1, command_pair2) =
     command_time1 = snd(command_pair1)
     command_time2 = snd(command_pair2)
     if (command_time1 > command_time2) then
         1
     elsif (command_time1 < command_time2) then
+        -1
+    else
+        0
+    end
+end
+
+def sort_command_queue_by_time_descending(command_pair1, command_pair2) =
+    command_time1 = snd(command_pair1)
+    command_time2 = snd(command_pair2)
+    if (command_time1 < command_time2) then
+        1
+    elsif (command_time1 > command_time2) then
         -1
     else
         0
@@ -235,16 +249,25 @@ def timed_enqueue(command, exec_delay) = # command (list), exec_delay (float, se
     log("Command received: " ^ string_of(command) ^ " with execution set to " ^ string_of(exec_delay) ^ " seconds from now")
     command_pair = [(command, command_time)] # timed queue uses absolute times for execution
     timed_command_queue := list.append(!timed_command_queue, command_pair)
-    # now sort it by time so we can just look from the head of the list everywhere else
-    timed_command_queue := list.sort(sort_command_queue_by_time, !timed_command_queue)
+    # now sort it by time (least first) so we can just check the head of the list in the command loop
+    timed_command_queue := list.sort(sort_command_queue_by_time_ascending, !timed_command_queue)
     log("timed command queue now: " ^ string_of(!timed_command_queue))
 end
 
 def trackend_enqueue(command, exec_delay) =
-    log("Command received: " ^ string_of(command) ^ " with execution delay: " ^ string_of(exec_delay) ^ " from end of track")
-    command_pair = [(command, exec_delay)] # trackend queue uses a delay, which can be turned into a fixed time at track end
+    log("Command received: " ^ string_of(command) ^ " with execution delay: " ^ string_of(exec_delay) ^ " from end of next track")
+    command_pair = [(command, exec_delay)] # trackend queue uses a delay, all of which can be turned into fixed timed_enqueue requests at track end
     trackend_command_queue := list.append(!trackend_command_queue, command_pair)
     log("trackend command queue now: " ^ string_of(!trackend_command_queue))
+end
+
+def pre_trackend_enqueue(command, exec_delay) =
+    log("Command received: " ^ string_of(command) ^ " with execution time: " ^ string_of(exec_delay) ^ " before end of this track")
+    command_pair = [(command, exec_delay)]
+    pre_trackend_command_queue := list.append(!pre_trackend_command_queue, command_pair)
+    # now sort it by pre-trackend delay (largest first) so we can just look check the head of the list in the command loop
+    pre_trackend_command_queue := list.sort(sort_command_queue_by_time_descending, !pre_trackend_command_queue)
+    log("pre-trackend command queue now: " ^ string_of(!pre_trackend_command_queue))
 end
 
 # command-queueable functions
@@ -295,7 +318,7 @@ def dj_say (text) =
             command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v " ^ !current_voice ^ " \"[[ slnc 3000 ]] " ^ text ^ " \""
             ignore(run_process(command_string))
             log("SPEAKING [" ^ !current_voice ^ "]: " ^ text)
-            ignore(server.execute("playover_source.push " ^ speech_filename)) # TODO Likely will change in later version of LiquidSoap
+            ignore(server.execute("playover_source.push " ^ speech_filename)) # NOTE Likely will change in later version of LiquidSoap
         else
             log("Station voice_type not set to supported speech synthesizer. Say ignored.")
         end
@@ -305,7 +328,7 @@ end
 # show management functions (plus change_show queueable command)
 
 def shutdown_output() =
-    list.iter(source.shutdown, !current_show_source)
+    list.iter(source.shutdown, !current_output_source)
 end
 
 def handle_track_end (offset, metadata) =
@@ -317,7 +340,8 @@ def output_new_show (show_name) =
     log("  ------ New show starting: " ^ show_name ^ " ------  ")
     show_path = list.assoc(default="error", show_name, !show_paths)
     show_source = playlist(id="scheduled_show_playlist", show_path)
-    # FIXME maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
+    current_show_source := show_source
+    # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
     output_source =
         mksafe(
             smooth_add(delay=0.5, p=0.1, special=playover_source, normal=
@@ -333,7 +357,7 @@ def output_new_show (show_name) =
             )
         )
     s = hout(id="scheduled_show_output", output_source)
-    current_show_source := [s]
+    current_output_source := [s]
 end
 
 def change_show(showname) =
@@ -397,8 +421,8 @@ def process_trackend_command_queue() =
         this_command = fst(this_command_pair)
         this_command_delay = snd(this_command_pair)
         if (this_command_delay <= 0.0) then
-            # do it now!
-            execute_a_command(this_command)
+            # do it now! (actually queue it for immediate execution if possible)
+            timed_enqueue(this_command, 0.0)
         else
             # inject commands with non-zero delay into timed queue
             timed_enqueue(this_command, this_command_delay)
@@ -411,18 +435,42 @@ def process_trackend_command_queue() =
     track_endtime := false # reset and start waiting for next trackend
 end
 
+def process_pre_trackend_command_queue() =
+    track_remaining = source.remaining(!current_show_source)
+    def process_commands(this_command_pair) =
+        this_command = fst(this_command_pair)
+        this_command_time = snd(this_command_pair)
+        if (track_remaining <= this_command_time) then
+            # do it now! (actually queue it for immediate execution if possible)
+            timed_enqueue(this_command, 0.0)
+            false # done, doesn't get saved in the updated list
+        else
+            true
+        end
+    end
+    pre_trackend_command_queue := list.filter(process_commands, !pre_trackend_command_queue) # updated queue
+end
+
 # loop that executes commands out of queues at the proper time
 
 def command_loop() =
     now = gettimeofday()
+    # check pre_trackend_command_queue
+    track_remaining = source.remaining(!current_show_source)
+    next_pre_trackend_time = snd(list.hd(default=(["", ""], 0.0), !pre_trackend_command_queue))
+    if (track_remaining <= next_pre_trackend_time) then
+        process_pre_trackend_command_queue()
+    end
+    # check trackend_command_queue
     if (!track_endtime) then
         process_trackend_command_queue()
     end
+    # check timed_command_queue
     next_timed_command_time = snd(list.hd(default=(["", ""], 0.0), !timed_command_queue))
     if (now >= next_timed_command_time and next_timed_command_time != 0.0) then
         process_timed_command_queue()
     end
-    0.1
+    0.2
 end
 
 add_timeout(0.1, command_loop)
@@ -441,9 +489,9 @@ def req_trackend_enqueue (input_string) =
     if (input_list_length > 0) then
         command_name := list.nth(default="", input_list, 0)
         last_input = list.nth(default="", input_list, input_list_length-1)
-        last_input_as_float = float_of_string(default=-1.0, last_input)
+        last_input_as_float = float_of_string(default=0.8686, last_input) # hack to just check if there's a float there or not while allowing positive or negative input
         command_name_length = string.length(!command_name)
-        if (last_input_as_float >= 0.0) then
+        if (last_input_as_float != 0.8686) then # float found, so user provided a delay to be used rather than default
             command_time := last_input_as_float
             command_time_length = string.length(last_input)
             # command_arg is everything between command (at start) and time (at end)
@@ -452,14 +500,18 @@ def req_trackend_enqueue (input_string) =
             # command_arg is everything after command (at start)
             command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
         end
-        trackend_enqueue([!command_name, !command_arg], !command_time)
+        if (!command_time >= 0.0) then
+            trackend_enqueue([!command_name, !command_arg], !command_time)
+        else
+            pre_trackend_enqueue([!command_name, !command_arg], 0.0-!command_time)
+        end
         "Done"
     else
         "No command provided"
     end
 end
 
-def req_timed_enqueue (input_string) = # TODO near-complete code duplication from req_trackend_enque above, gross
+def req_timed_enqueue (input_string) =
     trimmed_input = string.trim(input_string)
     command_name = ref ""
     command_arg = ref ""

@@ -1,13 +1,13 @@
 {
   "showconfig_path": "showconfig.json",
   "output_encoding": "mp3_192k",
-  "spoken_ID": "This is Bass Cadet.",
+  "spoken_ID": "This is Bass Cadet Test.",
   "currentshow_path": "currentShow.log",
-  "url": "http://basscadet.net:8000/",
+  "url": "http://basscadet.net:8000/basscadettest.mp3",
   "icecast_password": "GUEvoN3gKVKc9vwW",
   "host": "localhost",
   "log_path": "/tmp/StationManager2_test.log",
-  "harbor_port": 8050,
+  "harbor_port": 8051,
   "telnet_server": true,
   "telnet_server_netmask": "127.0.0.1",
   "harbor_password": "mjMrG5gNK8o9225Q",
@@ -15,10 +15,12 @@
   "showschedule_path": "showschedule.json",
   "mount": "basscadettest.mp3",
   "tracklog_path": "recentTracks.log",
+  "voice_type": "mac",
   "playlists_root": "/Users/omm/Radio Station/Music/",
   "port": 8000,
   "telnet_server_timeout": 300,
   "genre": "Electronic & Hip-Hop",
-  "telnet_server_port": 1337,
-  "description": "An electic mix of Electronic and Hip-Hop tracks"
+  "default_voice": "Daniel",
+  "telnet_server_port": 1338,
+  "description": "Testing Basscadet setup..."
 }

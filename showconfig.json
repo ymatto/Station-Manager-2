@@ -1,51 +1,65 @@
 {
   "Bump": {
-    "shuffle_mode": "songs",
-    "DJ_voice": "Alex",
+    "signon": "Welcome to the Bump.",
     "show_description": "real hip-hop in your face",
     "playlist_path": "Bump in the Trunk",
-    "show_longname": "The Bump"
+    "shuffle_mode": "songs",
+    "signoff": "Thanks for listening to the Bump.",
+    "show_longname": "The Bump",
+    "DJ_voice": "Alex"
   },
   "Headnod": {
-    "shuffle_mode": "songs",
-    "DJ_voice": "Alex",
+    "signon": "Welcome to the Head Nod.",
     "show_description": "laid-back hip-hop tracks from the 90s to today",
     "playlist_path": "Laid Back Hip-Hop",
-    "show_longname": "The Head Nod"
+    "shuffle_mode": "songs",
+    "signoff": "Thanks for listening to the Head Nod.",
+    "show_longname": "The Head Nod",
+    "DJ_voice": "Alex"
   },
   "Beats": {
-    "shuffle_mode": "songs",
-    "DJ_voice": "Whisper",
+    "signon": "Welcome to Straight Beats.",
     "show_description": "instrumental hip-hop",
     "playlist_path": "Instrumental Hip-Hop",
-    "show_longname": "Straight Beats"
+    "shuffle_mode": "songs",
+    "signoff": "Thanks for listening to Straight Beats.",
+    "show_longname": "Straight Beats",
+    "DJ_voice": "Whisper"
   },
   "Afterparty": {
-    "shuffle_mode": "songs",
-    "DJ_voice": "Daniel",
+    "signon": "Welcome to the After Party show.",
     "show_description": "rhythms for late-night voyages",
     "playlist_path": "Afterparty",
-    "show_longname": "The Afterparty Show"
+    "shuffle_mode": "songs",
+    "signoff": "Thanks for listening to the After Party show.",
+    "show_longname": "The Afterparty Show",
+    "DJ_voice": "Daniel"
   },
   "Braindance": {
-    "shuffle_mode": "songs",
-    "DJ_voice": "Daniel",
+    "signon": "Welcome to the Brain Dance show.",
     "show_description": "beat-oriented electronic music",
     "playlist_path": "Braindance",
-    "show_longname": "The Brain Dance Show"
+    "shuffle_mode": "songs",
+    "signoff": "Thanks for listening to the Brain Dance show.",
+    "show_longname": "The Brain Dance Show",
+    "DJ_voice": "Daniel"
   },
   "Groovestyle": {
-    "shuffle_mode": "songs",
-    "DJ_voice": "Ava",
+    "signon": "Welcome to Groove Style.",
     "show_description": "your personal soundtrack",
     "playlist_path": "Stylish Background",
-    "show_longname": "Groovestyle"
+    "shuffle_mode": "songs",
+    "signoff": "Thanks for listening to Groove Style.",
+    "show_longname": "Groovestyle",
+    "DJ_voice": "Ava"
   },
   "Nightmode": {
-    "shuffle_mode": "songs",
-    "DJ_voice": "Whisper",
+    "signon": "Welcome to Night Mode.",
     "show_description": "deep electronic tracks for your mind",
     "playlist_path": "Late Night Electronic",
-    "show_longname": "Nightmode"
+    "shuffle_mode": "songs",
+    "signoff": "Thanks for listening to Night Mode.",
+    "show_longname": "Nightmode",
+    "DJ_voice": "Whisper"
   }
 }

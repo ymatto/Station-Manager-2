@@ -201,12 +201,63 @@ hout = output.icecast(
 
 
 
+# TIME FUNCTIONS
+
+def get_weekday_name(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
+    daymapping = [
+        (0, "Sunday"),
+        (1, "Monday"),
+        (2, "Tuesday"),
+        (3, "Wednesday"),
+        (4, "Thursday"),
+        (5, "Friday"),
+        (6, "Saturday")
+    ]
+    list.assoc(default="error", wday, daymapping)
+end
+
+def get_today() =
+    localtime(gettimeofday(), get_weekday_name)
+end
+
+def get_tomorrow() =
+    localtime(gettimeofday()+86400.0, get_weekday_name)
+end
+
+def get_hour_int(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
+    hour
+end
+
+def get_current_hour() =
+    localtime(gettimeofday(), get_hour_int)
+end
+
+def get_time_since_midnight(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
+    float_of_int(sec + (min * 60 + (hour * 3600)))
+end
+
+def get_time_since_last_hour(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
+    float_of_int(sec + (min * 60))
+end
+
+# returns the unixtime at midnight at the start of today
+def get_today_start_time() =
+    now = gettimeofday()
+    time_since_midnight = localtime(now, get_time_since_midnight)
+    now - time_since_midnight
+end
+
+
+
+
+
+
 # DJ CONTROL BOARD FUNCTIONS
 
-current_show_name = ref ""
-current_output_source = ref [hout(blank())] # make sure the ref is explicitly an active_source
-current_show_source = ref blank()
-current_voice = ref ""
+current_show_name = ref "" # name of actual broadcasting show (independent of schedule - if there even is one)
+current_output_source = ref [hout(blank())] # broadcasting source that can be killed. hour(blank()) is to make sure the ref is explicitly an active_source
+current_show_source = ref blank() # the current show playlist source that can be monitored or controlled
+current_voice = ref "" # name of current voice to use for synthesized DJ statements
 
 fadeout_trackend = ref false
 fadeout_instant = ref false
@@ -255,7 +306,7 @@ def timed_enqueue(command, exec_delay) = # command (list), exec_delay (float, se
 end
 
 def trackend_enqueue(command, exec_delay) =
-    log("Trackend DJ command received:      " ^ string_of(command) ^ " with execution delay: " ^ string_of(exec_delay) ^ " from end of this track")
+    log("Trackend DJ command received:      " ^ string_of(command) ^ " with execution delay: " ^ string_of(exec_delay) ^ " after end of this track")
     command_pair = [(command, exec_delay)] # trackend queue uses a delay, all of which can be turned into fixed timed_enqueue requests at track end
     trackend_command_queue := list.append(!trackend_command_queue, command_pair)
     # log("trackend command queue now: " ^ string_of(!trackend_command_queue))
@@ -324,6 +375,7 @@ def dj_say (text) =
     end
 end
 
+
 # show management functions (plus change_show queueable command)
 
 def shutdown_output() =
@@ -331,7 +383,7 @@ def shutdown_output() =
 end
 
 def handle_track_end (offset, metadata) =
-    log("  - track change in 5s -")
+    log("  - track change signal -")
     track_endtime := true # triggers the command_loop
 end
 
@@ -345,7 +397,7 @@ def output_new_show (show_name) =
         mksafe(
             smooth_add(delay=0.5, p=0.1, special=playover_source, normal=
                 crossfade(duration=5.0, #TODO make this (and offset below) a config parameter? per show ideally?
-                    on_offset(offset=0.0, handle_track_end, # NOTE triggers 5s before the apparent crossover point
+                    on_offset(offset=0.0, handle_track_end,
                         switch( track_sensitive=false, [ ({!fadeout_instant == true}, blank()), ({true},
                             switch( track_sensitive=true, [ ({!fadeout_trackend == true}, blank()), ({true},
                                 show_source
@@ -436,19 +488,19 @@ def process_trackend_command_queue() =
         this_command = fst(this_command_pair)
         this_command_delay = snd(this_command_pair)
         if (this_command_delay <= 0.0) then
-            # do it now! (actually queue it for 5s when the expected track end happens)
-            timed_enqueue(this_command, 5.0)
+            # queue it now!
+            timed_enqueue(this_command, 0.0)
         else
-            # inject commands with non-zero delay into timed queue (with the 5s delay)
-            timed_enqueue(this_command, this_command_delay + 5.0)
+            # inject commands with non-zero delay into timed queue
+            timed_enqueue(this_command, this_command_delay + 0.0)
         end
         false # just return an empty queue to the filter
     end
     def process_pretrackend_commands(this_command_pair) =
         this_command = fst(this_command_pair)
         this_command_time = snd(this_command_pair)
-        # do it now! (actually queue it for 5s when the expected track end happens)
-        timed_enqueue(this_command, 5.0)
+        # queue it now!
+        timed_enqueue(this_command, 0.0)
         false # just return an empty queue to the filter
     end
 
@@ -554,14 +606,26 @@ def dj_timed_enqueue (input_string) =
 end
 
 server.register(namespace="dj",
-                usage="trackend_enqueue <command> [<argument>] [<time>]",
-                description="Inserts a command into the DJ queue to be run at at delay from track's end",
+                usage="trackend <command> [<argument>] [<time>]",
+                description="Inserts a command into the DJ queue to be run at an optional delay time (s) from track's end\n" ^
+                            "  Supported commands:\n" ^
+                            "      change_show [show name]\n" ^
+                            "      set_fadeout_trackend [true/false]\n" ^
+                            "      set_fadeout_instant [true/false]\n" ^
+                            "      dj_say [statement]\n" ^
+                            "      set_voice [voice name]\n",
                 "trackend",
                 dj_trackend_enqueue)
 
 server.register(namespace="dj",
-                usage="timed_enqueue <command> [<argument>] [<time>]",
-                description="Inserts a command into the DJ queue to be run after a delay from now",
+                usage="now <command> [<argument>] [<time>]",
+                description="Inserts a command into the DJ queue to be run after an optional delay time (s) from now\n" ^
+                            "  Supported commands:\n" ^
+                            "      change_show [show name]\n" ^
+                            "      set_fadeout_trackend [true/false]\n" ^
+                            "      set_fadeout_instant [true/false]\n" ^
+                            "      dj_say [statement]\n" ^
+                            "      set_voice [voice name]\n",
                 "now",
                 dj_timed_enqueue)
 
@@ -569,57 +633,7 @@ server.register(namespace="dj",
 
 
 
-# SET UP AUTOMATED HARBOR SOURCE CONTROL VIA SCHEDULE – AKA DJ LOOPER
-
-# time functions
-
-def get_weekday_name(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
-    daymapping = [
-        (0, "Sunday"),
-        (1, "Monday"),
-        (2, "Tuesday"),
-        (3, "Wednesday"),
-        (4, "Thursday"),
-        (5, "Friday"),
-        (6, "Saturday")
-    ]
-    list.assoc(default="error", wday, daymapping)
-end
-
-def get_today() =
-    localtime(gettimeofday(), get_weekday_name)
-end
-
-def get_tomorrow() =
-    localtime(gettimeofday()+86400.0, get_weekday_name)
-end
-
-def get_hour_int(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
-    hour
-end
-
-def get_current_hour() =
-    localtime(gettimeofday(), get_hour_int)
-end
-
-def get_time_since_midnight(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
-    float_of_int(sec + (min * 60 + (hour * 3600)))
-end
-
-def get_time_since_last_hour(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
-    float_of_int(sec + (min * 60))
-end
-
-# returns the unixtime at midnight at the start of today
-def get_today_start_time() =
-    now = gettimeofday()
-    time_since_midnight = localtime(now, get_time_since_midnight)
-    now - time_since_midnight
-end
-
-
-
-# functions for show management
+# SET UP AUTOMATED HARBOR SOURCE CONTROL VIA SCHEDULE – AKA AUTO-DJ
 
 current_scheduled_show_name = ref ""
 current_scheduled_show_hour = ref 0
@@ -628,46 +642,47 @@ next_scheduled_show_name = ref ""
 next_scheduled_show_hour = ref 0
 next_scheduled_show_time = ref 0.0
 
-def add_indices(this_index, this_listitem) =
-    (this_index, this_listitem)
-end
-
-def find_todays_dow_types (listpair) =
-    this_index = fst(listpair)
-    this_type = snd(listpair)
-    deez_schedule_days = list.nth(default=[""], !showschedule_days, this_index)
-    today = get_today()
-    if (this_type == "daysofweek" and list.mem(today, deez_schedule_days)) then
-        true
-    else
-        false
-    end
-end
-
-def find_tomorrows_dow_types (listpair) =
-    this_index = fst(listpair)
-    this_type = snd(listpair)
-    deez_schedule_days = list.nth(default=[""], !showschedule_days, this_index)
-    tomorrow = get_tomorrow() # <-- note
-    if (this_type == "daysofweek" and list.mem(tomorrow, deez_schedule_days)) then
-        true
-    else
-        false
-    end
-end
-
-def is_prior_hour(listpair) =
-    this_index = fst(listpair)
-    this_hour = snd(listpair)
-    now_hour = get_current_hour()
-    if (this_hour <= now_hour) then
-        true
-    else
-        false
-    end
-end
-
 def update_current_next_shows () =
+
+    def add_indices(this_index, this_listitem) =
+        (this_index, this_listitem)
+    end
+
+    def find_todays_dow_types (listpair) =
+        this_index = fst(listpair)
+        this_type = snd(listpair)
+        deez_schedule_days = list.nth(default=[""], !showschedule_days, this_index)
+        today = get_today()
+        if (this_type == "daysofweek" and list.mem(today, deez_schedule_days)) then
+            true
+        else
+            false
+        end
+    end
+
+    def find_tomorrows_dow_types (listpair) =
+        this_index = fst(listpair)
+        this_type = snd(listpair)
+        deez_schedule_days = list.nth(default=[""], !showschedule_days, this_index)
+        tomorrow = get_tomorrow() # <-- note
+        if (this_type == "daysofweek" and list.mem(tomorrow, deez_schedule_days)) then
+            true
+        else
+            false
+        end
+    end
+
+    def is_prior_hour(listpair) =
+        this_index = fst(listpair)
+        this_hour = snd(listpair)
+        now_hour = get_current_hour()
+        if (this_hour <= now_hour) then
+            true
+        else
+            false
+        end
+    end
+
     log("Updating current and next scheduled shows...")
     todays_schedule_index = ref 0
     todays_show_names = ref []
@@ -680,7 +695,7 @@ def update_current_next_shows () =
     tomorrow_start_time = today_start_time + 86400.0
     indexed_schedule_types = list.mapi(add_indices, !showschedule_types)
 
-    #TODO: search for "daysofyear" types first
+    # TODO: search for "daysofyear" types first
     todays_indexed_dow_schedules = list.filter(find_todays_dow_types, indexed_schedule_types)
     # is there a top-heirarchy schedule type for today?
     if (list.length(todays_indexed_dow_schedules) > 0) then
@@ -708,7 +723,7 @@ def update_current_next_shows () =
     else
         # okay, gotta use tomorrow's schedule...
         log("    Getting first show of tomorrow's schedule...")
-        #TODO: search for "daysofyear" types first
+        # TODO: search for "daysofyear" types first
         tomorrows_indexed_dow_schedules = list.filter(find_tomorrows_dow_types, indexed_schedule_types)
         # is there a top heirarchy schedule type for tomorrow?
         if (list.length(tomorrows_indexed_dow_schedules) > 0) then
@@ -730,10 +745,9 @@ def update_current_next_shows () =
 end
 
 
-
 # auto-dj control loop
 
-default_pulse = 5.0 # seconds between loops if there's no other need
+default_pulse = 2.0 # seconds between loops if there's no other need
 next_pulse = ref 0.0
 last_handled_hour_time = ref 0.0 # time of the last hour mark that was "handled" by show switch/station ID
 
@@ -755,8 +769,12 @@ def auto_dj_loop() =
     end
     up_next_hour_time = !last_handled_hour_time + 3600.0
 
+    if (now >= !next_scheduled_show_time) then # always keep the latest schedule info correct, regardless of other logic
+        update_current_next_shows()
+    end
+
     # do show signoffs, signons, and station IDs when it's time
-    if (now > up_next_hour_time - 60.0 and track_end_time > up_next_hour_time) then
+    if (now > up_next_hour_time - 60.0 and track_end_time >= up_next_hour_time) then
         log(" *** AUTO-DJ: Time to handle the hour.")
         if (track_end_time < up_next_hour_time + (10.0 * 60.0)) then # do stuff at the trackend
             # NOTE ideally this should be an == without the 100.0s slop, but I don't trust my float times
@@ -766,7 +784,7 @@ def auto_dj_loop() =
                 trackend_enqueue(["change_show", !next_scheduled_show_name], 3.0)
                 current_signoff = list.assoc(default="", !current_scheduled_show_name, !show_signoffs)
                 if (current_signoff != "") then
-                    pre_trackend_enqueue(["dj_say", current_signoff], 60.0)
+                    pre_trackend_enqueue(["dj_say", current_signoff], 50.0)
                 end
                 next_signon = list.assoc(default=station_spoken_ID, !next_scheduled_show_name, !show_signons)
                 if (next_signon != "") then
@@ -775,7 +793,7 @@ def auto_dj_loop() =
             else # no scheduled show switch this hour, so see about doing a station ID
                 if (station_spoken_ID != "") then
                     log(" *** AUTO-DJ: Time for a station ID announcement.")
-                    trackend_enqueue(["dj_say", station_spoken_ID], 0.0)
+                    trackend_enqueue(["dj_say", station_spoken_ID], -12.0)
                 end
             end
         else # it's time to go but the current track ends 10 minutes after the hour, so just do it without waiting for track end.
@@ -783,15 +801,15 @@ def auto_dj_loop() =
             if (!next_scheduled_show_time < up_next_hour_time + 100.0 and !next_scheduled_show_name != !current_scheduled_show_name) then
                 log (" *** AUTO-DJ: Coming up next... " ^ !next_scheduled_show_name)
                 log (" *** AUTO-DJ: Current track ends more than 10 minutes after the hour. ")
-                timed_enqueue(["set_fadeout_instant", "true"], 60.0)
-                trackend_enqueue(["change_show", !next_scheduled_show_name], 63.0)
+                timed_enqueue(["set_fadeout_instant", "true"], 50.0)
+                timed_enqueue(["change_show", !next_scheduled_show_name], 53.0)
                 current_signoff = list.assoc(default="", !current_scheduled_show_name, !show_signoffs)
                 if (current_signoff != "") then
                     timed_enqueue(["dj_say", current_signoff], 0.0)
                 end
                 next_signon = list.assoc(default=station_spoken_ID, !next_scheduled_show_name, !show_signons)
                 if (next_signon != "") then
-                    timed_enqueue(["dj_say", next_signon], 78.0)
+                    timed_enqueue(["dj_say", next_signon], 68.0)
                 end
             else # no scheduled show switch this hour, so see about doing a station ID
                 if (station_spoken_ID != "") then
@@ -800,8 +818,7 @@ def auto_dj_loop() =
                 end
             end
         end
-        update_current_next_shows() # show change (or lack thereof) handled, so we can update this
-        last_handled_hour_time := up_next_hour_time # one way or the other, this hour is handled
+        last_handled_hour_time := up_next_hour_time # one way or the other, this hour is handled and this section won't run again
     end
 
     !next_pulse

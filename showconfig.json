@@ -4,7 +4,7 @@
     "show_description": "real hip-hop in your face",
     "playlist_path": "Bump in the Trunk",
     "shuffle_mode": "songs",
-    "signoff": "",
+    "signoff": "Thanks for listening to the Bump.",
     "show_longname": "The Bump",
     "DJ_voice": "Alex"
   },
@@ -13,7 +13,7 @@
     "show_description": "laid-back hip-hop tracks from the 90s to today",
     "playlist_path": "Laid Back Hip-Hop",
     "shuffle_mode": "songs",
-    "signoff": "",
+    "signoff": "Thanks for listening to the Head Nod.",
     "show_longname": "The Head Nod",
     "DJ_voice": "Alex"
   },
@@ -22,7 +22,7 @@
     "show_description": "instrumental hip-hop",
     "playlist_path": "Instrumental Hip-Hop",
     "shuffle_mode": "songs",
-    "signoff": "",
+    "signoff": "Thanks for listening to Straight Beats.",
     "show_longname": "Straight Beats",
     "DJ_voice": "Whisper"
   },
@@ -31,7 +31,7 @@
     "show_description": "rhythms for late-night voyages",
     "playlist_path": "Afterparty",
     "shuffle_mode": "songs",
-    "signoff": "",
+    "signoff": "Thanks for listening to the After Party show.",
     "show_longname": "The Afterparty Show",
     "DJ_voice": "Daniel"
   },
@@ -49,7 +49,7 @@
     "show_description": "your personal soundtrack",
     "playlist_path": "Stylish Background",
     "shuffle_mode": "songs",
-    "signoff": "",
+    "signoff": "Thanks for listening to Groove Style.",
     "show_longname": "Groovestyle",
     "DJ_voice": "Ava"
   },
@@ -58,7 +58,7 @@
     "show_description": "deep electronic tracks for your mind",
     "playlist_path": "Late Night Electronic",
     "shuffle_mode": "songs",
-    "signoff": "",
+    "signoff": "Thanks for listening to Night Mode.",
     "show_longname": "Nightmode",
     "DJ_voice": "Whisper"
   }

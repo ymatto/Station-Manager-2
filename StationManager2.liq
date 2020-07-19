@@ -800,7 +800,7 @@ def auto_dj_loop() =
             else # no scheduled show switch this hour, so see about doing a station ID
                 if (station_spoken_ID != "") then
                     log(" *** AUTO-DJ: Time for a station ID announcement.")
-                    trackend_enqueue(["say", station_spoken_ID], -12.0)
+                    pre_trackend_enqueue(["say", station_spoken_ID], 12.0)
                 end
             end
         else # it's time to go but the current track ends 10 minutes after the hour, so just do it without waiting for track end.

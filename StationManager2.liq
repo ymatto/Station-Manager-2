@@ -1,5 +1,5 @@
 #!/Users/omm/.opam/default/bin/liquidsoap -v
-
+# NOTE if this is being run by launchd on the mac, voice synthesis requires it run as an agent, not a daemon (because "say" is a GUI app)
 
 # LOAD STATIONCONFIG
 
@@ -358,7 +358,7 @@ def set_voice (voicename) =
     log("New voice selected: " ^ !newvoice)
 end
 
-def dj_say (text) =
+def say (text) =
     speech_filename = file.temp("SM2_speech_", ".wav")
     if (!current_voice == "") then
         log("No voice configured. Say ignored.")
@@ -366,9 +366,13 @@ def dj_say (text) =
         if (station_voice_type == "mac") then
             # NOTE The 3500ms of silence is to copensate for the fade time on the playover_source
             command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v " ^ !current_voice ^ " \"[[ slnc 3500 ]] " ^ text ^ " \""
-            ignore(run_process(command_string))
-            log("SPEAKING [" ^ !current_voice ^ "]: " ^ text)
-            ignore(server.execute("playover_source.push " ^ speech_filename)) # NOTE Likely will change in later version of LiquidSoap
+            process_return = run_process(timeout = 20.0, command_string)
+            if (process_return != ("","",("exit", "0"))) then
+                log("SAY DJ COMMAND FAILED: " ^ string_of(process_return))
+            else
+                log("SPEAKING [" ^ !current_voice ^ "]: " ^ text)
+                ignore(server.execute("playover_source.push " ^ speech_filename)) # NOTE Likely will change in later version of LiquidSoap
+            end
         else
             log("Station voice_type not set to supported speech synthesizer. Say ignored.")
         end
@@ -444,8 +448,8 @@ def execute_a_command(command) =
         set_fadeout_trackend(command_arg)
     elsif (command_name == "set_fadeout_instant") then
         set_fadeout_instant(command_arg)
-    elsif (command_name == "dj_say") then
-        dj_say(command_arg)
+    elsif (command_name == "say") then
+        say(command_arg)
     elsif (command_name == "set_voice") then
         set_voice(command_arg)
     end
@@ -541,6 +545,9 @@ end
 add_timeout(0.1, command_loop)
 
 
+
+
+
 # SERVER FUNCTIONS
 
 def dj_trackend_enqueue (input_string) =
@@ -612,7 +619,7 @@ server.register(namespace="dj",
                             "      change_show [show name]\n" ^
                             "      set_fadeout_trackend [true/false]\n" ^
                             "      set_fadeout_instant [true/false]\n" ^
-                            "      dj_say [statement]\n" ^
+                            "      say [statement]\n" ^
                             "      set_voice [voice name]\n",
                 "trackend",
                 dj_trackend_enqueue)
@@ -624,7 +631,7 @@ server.register(namespace="dj",
                             "      change_show [show name]\n" ^
                             "      set_fadeout_trackend [true/false]\n" ^
                             "      set_fadeout_instant [true/false]\n" ^
-                            "      dj_say [statement]\n" ^
+                            "      say [statement]\n" ^
                             "      set_voice [voice name]\n",
                 "now",
                 dj_timed_enqueue)
@@ -784,16 +791,16 @@ def auto_dj_loop() =
                 trackend_enqueue(["change_show", !next_scheduled_show_name], 3.0)
                 current_signoff = list.assoc(default="", !current_scheduled_show_name, !show_signoffs)
                 if (current_signoff != "") then
-                    pre_trackend_enqueue(["dj_say", current_signoff], 50.0)
+                    pre_trackend_enqueue(["say", current_signoff], 50.0)
                 end
                 next_signon = list.assoc(default=station_spoken_ID, !next_scheduled_show_name, !show_signons)
                 if (next_signon != "") then
-                    trackend_enqueue(["dj_say", next_signon], 18.0)
+                    trackend_enqueue(["say", next_signon], 18.0)
                 end
             else # no scheduled show switch this hour, so see about doing a station ID
                 if (station_spoken_ID != "") then
                     log(" *** AUTO-DJ: Time for a station ID announcement.")
-                    trackend_enqueue(["dj_say", station_spoken_ID], -12.0)
+                    trackend_enqueue(["say", station_spoken_ID], -12.0)
                 end
             end
         else # it's time to go but the current track ends 10 minutes after the hour, so just do it without waiting for track end.
@@ -805,16 +812,16 @@ def auto_dj_loop() =
                 timed_enqueue(["change_show", !next_scheduled_show_name], 53.0)
                 current_signoff = list.assoc(default="", !current_scheduled_show_name, !show_signoffs)
                 if (current_signoff != "") then
-                    timed_enqueue(["dj_say", current_signoff], 0.0)
+                    timed_enqueue(["say", current_signoff], 0.0)
                 end
                 next_signon = list.assoc(default=station_spoken_ID, !next_scheduled_show_name, !show_signons)
                 if (next_signon != "") then
-                    timed_enqueue(["dj_say", next_signon], 68.0)
+                    timed_enqueue(["say", next_signon], 68.0)
                 end
             else # no scheduled show switch this hour, so see about doing a station ID
                 if (station_spoken_ID != "") then
                     log(" *** AUTO-DJ: Time for a station ID announcement.")
-                    timed_enqueue(["dj_say", station_spoken_ID], 60.0)
+                    timed_enqueue(["say", station_spoken_ID], 60.0)
                 end
             end
         end

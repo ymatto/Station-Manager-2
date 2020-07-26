@@ -364,8 +364,8 @@ def say (text) =
         log("No voice configured. Say ignored.")
     else
         if (station_voice_type == "mac") then
-            # NOTE The 3500ms of silence is to copensate for the fade time on the playover_source
-            command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v " ^ !current_voice ^ " \"[[ slnc 3500 ]] " ^ text ^ " \""
+            # NOTE The 4000ms of silence is to copensate for the fade time on the playover_source
+            command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v " ^ !current_voice ^ " \"[[ slnc 4000 ]] " ^ text ^ " \""
             process_return = run_process(timeout = 20.0, command_string)
             if (process_return != ("","",("exit", "0"))) then
                 log("SAY DJ COMMAND FAILED: " ^ string_of(process_return))
@@ -791,11 +791,11 @@ def auto_dj_loop() =
                 trackend_enqueue(["change_show", !next_scheduled_show_name], 3.0)
                 current_signoff = list.assoc(default="", !current_scheduled_show_name, !show_signoffs)
                 if (current_signoff != "") then
-                    pre_trackend_enqueue(["say", current_signoff], 50.0)
+                    pre_trackend_enqueue(["say", current_signoff], 40.0)
                 end
                 next_signon = list.assoc(default=station_spoken_ID, !next_scheduled_show_name, !show_signons)
                 if (next_signon != "") then
-                    trackend_enqueue(["say", next_signon], 18.0)
+                    trackend_enqueue(["say", next_signon], 13.0)
                 end
             else # no scheduled show switch this hour, so see about doing a station ID
                 if (station_spoken_ID != "") then
@@ -808,17 +808,18 @@ def auto_dj_loop() =
             if (!next_scheduled_show_time < up_next_hour_time + 100.0 and !next_scheduled_show_name != !current_scheduled_show_name) then
                 log (" *** AUTO-DJ: Coming up next... " ^ !next_scheduled_show_name)
                 log (" *** AUTO-DJ: Current track ends more than 10 minutes after the hour. ")
-                timed_enqueue(["set_fadeout_instant", "true"], 50.0)
-                timed_enqueue(["change_show", !next_scheduled_show_name], 53.0)
+                timed_enqueue(["set_fadeout_instant", "true"], 40.0)
+                timed_enqueue(["change_show", !next_scheduled_show_name], 43.0)
+                timed_enqueue(["set_fadeout_instant", "false"], 43.1)
                 current_signoff = list.assoc(default="", !current_scheduled_show_name, !show_signoffs)
                 if (current_signoff != "") then
                     timed_enqueue(["say", current_signoff], 0.0)
                 end
                 next_signon = list.assoc(default=station_spoken_ID, !next_scheduled_show_name, !show_signons)
                 if (next_signon != "") then
-                    timed_enqueue(["say", next_signon], 68.0)
+                    timed_enqueue(["say", next_signon], 63.0)
                 end
-            else # no scheduled show switch this hour, so see about doing a station ID
+            else # no scheduled show switch this hour, so see about doing a station ID right around the hour
                 if (station_spoken_ID != "") then
                     log(" *** AUTO-DJ: Time for a station ID announcement.")
                     timed_enqueue(["say", station_spoken_ID], 60.0)

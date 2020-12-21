@@ -1,6 +1,6 @@
 {
   "showconfig_path": "showconfig.json",
-  "spoken_ID": "You're listening to Bass Cadet Radio test stream.",
+  "spoken_ID": "You're listening to Base Cadet Radio test stream.",
   "telnet_server_port": 1338,
   "description": "Testing Basscadet setup...",
   "url": "http://basscadet.net:8000/basscadettest.mp3",

@@ -1,4 +1,6 @@
 #!/Users/omm/.opam/default/bin/liquidsoap -v
+# If not running this from the commandline (such as launchd), make sure to include '--' before the configuration file argument
+# ie.: /Users/omm/Basscadet/StationManager2.liq -- stationconfig.json
 # NOTE if this is being run by launchd on the mac, voice synthesis requires it run as an agent, not a daemon (because "say" is a GUI app)
 
 # LOAD STATIONCONFIG

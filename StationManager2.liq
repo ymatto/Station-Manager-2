@@ -34,7 +34,7 @@ station_port = list.assoc(default=8000, "port", station_config_ints)
 station_mount = list.assoc(default="radio.mp3", "mount", station_config_strings)
 station_genre = list.assoc(default="", "genre", station_config_strings)
 station_url = list.assoc(default="", "url", station_config_strings)
-station_playlists_root = ref station_config_strings["playlists_root"] # FIX: better way than using ref?
+station_playlists_root = ref (station_config_strings["playlists_root"]) # FIX: better way than using ref?
 station_showconfig_path = station_config_strings["showconfig_path"]
 station_showschedule_path = station_config_strings["showschedule_path"]
 station_icecast_password = station_config_strings["icecast_password"]
@@ -46,7 +46,9 @@ station_harbor_port = list.assoc(default=station_port+10, "harbor_port", station
 station_harbor_password = list.assoc(default=station_icecast_password^string_of(random.int()), "harbor_password", station_config_strings)
 
 # Logs setup
+# FIX REVERSE WHAT'S COMMENTED
 set("log.file.path",station_log_path)
+# settings.log.file.path(station_log_path)
 
 # Server setup
 if (station_telnet_server) then
@@ -54,6 +56,10 @@ if (station_telnet_server) then
     set("server.telnet.port", station_telnet_server_port)
     set("server.telnet.bind_addr", station_telnet_server_netmask)
     set("server.timeout", station_telnet_server_timeout) # negative value disables timeout
+#    settings.server.telnet(station_telnet_server)
+#    settings.server.telnet.port(station_telnet_server_port)
+#    settings.server.telnet.bind_addr(station_telnet_server_netmask)
+#    settings.server.timeout(station_telnet_server_timeout) # negative value disables timeout
 end
 
 
@@ -65,12 +71,12 @@ end
 # TODO: Deal with failure-to-read better with thoughtful defaults and handling
 
 # TODO should do show_names here too, just as a convenient list of keys for the other lists
-show_paths = ref [] # ("Beats", "files/Instrumental Hip-Hop"), ("Groovestyle", "files/Stylish Background"), ...
-show_longnames = ref [] # ("Beats", "Straight Beats"), ("Groovestyle", "Groovestyle"), ...
-show_voices = ref [] # ("Beats", "Whisper"), ("Groovestyle", "Ava"), ...
-show_signons = ref []
-show_signoffs = ref []
-show_shufflemodes = ref []
+show_paths = ref ([]) # ("Beats", "files/Instrumental Hip-Hop"), ("Groovestyle", "files/Stylish Background"), ...
+show_longnames = ref ([]) # ("Beats", "Straight Beats"), ("Groovestyle", "Groovestyle"), ...
+show_voices = ref ([]) # ("Beats", "Whisper"), ("Groovestyle", "Ava"), ...
+show_signons = ref ([])
+show_signoffs = ref ([])
+show_shufflemodes = ref ([])
 
 showconfig_file = file.contents(station_showconfig_path)
 showconfig = of_json(default=[ ( "error" , [("no show found", "")] ) ], showconfig_file)
@@ -105,10 +111,10 @@ list.iter(get_show, showconfig)
 # TODO: Deal with failure-to-read better with thoughtful defaults and handling
 # TODO: Ultimately this should probably be in a func so it can be skipped, and so the file can be re-read for updates
 
-showschedule_types = ref [] # "daysofweek", "everyday", ...
-showschedule_days = ref [] # ["Mondays", "Wednesdays"], [""], ...
-showschedule_show_names = ref [] # ["Afterparty", "Groovestyle", "Nightmode"], ["Braindance", "Beats"], ...
-showschedule_show_hours = ref [] # [0, 7, 16], [0, 12], ...
+showschedule_types = ref ([]) # "daysofweek", "everyday", ...
+showschedule_days = ref ([]) # ["Mondays", "Wednesdays"], [""], ...
+showschedule_show_names = ref ([]) # ["Afterparty", "Groovestyle", "Nightmode"], ["Braindance", "Beats"], ...
+showschedule_show_hours = ref ([]) # [0, 7, 16], [0, 12], ...
 
 showschedule_file = file.contents(station_showschedule_path)
 
@@ -152,8 +158,8 @@ list.iter(get_showschedule_intlists, showschedule_intlist_pairs)
 
 # FUNCTIONS TO UPDATE LOG DATA ON NEW METADATA
 
-recent_tracks = ref []
-new_tracklog = ref ""
+recent_tracks = ref ([])
+new_tracklog = ref ("")
 
 # Write stuff whenever there's new metadata
 
@@ -162,8 +168,9 @@ def addtotracklog(nexttrack) =
 end
 
 def logtrack(metadata) =
-    #TODO don't log if the info is blank or "-" or whatever at show changes
-    newline="#{metadata[\"artist\"]} - #{metadata[\"album\"]} - #{metadata[\"title\"]}"
+    # TODO don't log if the info is blank or "-" or whatever at show changes
+    # FIXME are backslashes before #'s okay? I added to make syntax highlighting not break...
+    newline="\#{metadata[\"artist\"]} - \#{metadata[\"album\"]} - \#{metadata[\"title\"]}"
     recent_tracks := list.add(newline, !recent_tracks)
     if (list.length(!recent_tracks) > 20) then
         recent_tracks := list.rev(list.tl(list.rev(!recent_tracks)))
@@ -186,18 +193,22 @@ end
 # BUILD THE HARBOR SOURCE FOR SCHEDULED SHOW SWITCHING
 
 set("harbor.bind_addr","0.0.0.0")
+# settings.harbor.bind_addr("0.0.0.0")  FIXME - CHANGE BACK TO THIS
 scheduled_source = input.harbor(
     id="internal_input_harbor",
     "broadcast-harbor",
     port=station_harbor_port,
     password=station_harbor_password )
 
-hout = output.icecast(
+hout = blank()
+
+output.icecast(
     %wav,
-    port = station_harbor_port,
     host = "0.0.0.0",
+    port = station_harbor_port,
     mount = "broadcast-harbor",
-    password = station_harbor_password )
+    password = station_harbor_password,
+    hout ) # NOTE added at 2.1 update? seems to require some input source now?
 
 
 
@@ -205,7 +216,7 @@ hout = output.icecast(
 
 # TIME FUNCTIONS
 
-def get_weekday_name(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
+def get_weekday_name(week_day_int) =
     daymapping = [
         (0, "Sunday"),
         (1, "Monday"),
@@ -215,37 +226,38 @@ def get_weekday_name(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst
         (5, "Friday"),
         (6, "Saturday")
     ]
-    list.assoc(default="error", wday, daymapping)
+    list.assoc(default="error", week_day_int, daymapping)
 end
 
 def get_today() =
-    localtime(gettimeofday(), get_weekday_name)
+    get_weekday_name(time.local().week_day)
 end
 
 def get_tomorrow() =
-    localtime(gettimeofday()+86400.0, get_weekday_name)
-end
-
-def get_hour_int(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
-    hour
+    get_weekday_name(time.local(time()+86400.0).week_day)
 end
 
 def get_current_hour() =
-    localtime(gettimeofday(), get_hour_int)
+    time.local().hour
 end
 
-def get_time_since_midnight(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
+def get_time_since_midnight() =
+    sec = time.local().sec
+    min = time.local().min
+    hour = time.local().hour
     float_of_int(sec + (min * 60 + (hour * 3600)))
 end
 
-def get_time_since_last_hour(~sec, ~min, ~hour, ~mday, ~mon, ~year, ~wday, ~yday, ~isdst) =
-    float_of_int(sec + (min * 60))
+def get_time_since_last_hour() =
+    sec = time.local().sec
+    min = time.local().min
+    float_of_int(sec + (min * 60))      
 end
 
 # returns the unixtime at midnight at the start of today
 def get_today_start_time() =
-    now = gettimeofday()
-    time_since_midnight = localtime(now, get_time_since_midnight)
+    now = time()
+    time_since_midnight = get_time_since_midnight()
     now - time_since_midnight
 end
 
@@ -256,19 +268,21 @@ end
 
 # DJ CONTROL BOARD FUNCTIONS
 
-current_show_name = ref "" # name of actual broadcasting show (independent of schedule - if there even is one)
-current_output_source = ref [hout(blank())] # broadcasting source that can be killed. hour(blank()) is to make sure the ref is explicitly an active_source
-current_show_source = ref blank() # the current show playlist source that can be monitored or controlled
-current_voice = ref "" # name of current voice to use for synthesized DJ statements
+current_show_name = ref ("") # name of actual broadcasting show (independent of schedule - if there even is one)
+# broadcasting source that can be killed. hout(blank()) is to make sure the ref is explicitly an active_source
+# although as of 2.0.0 `active_source` type was removed and all output returns `unit`
+current_output_source = ref (hout)
+current_show_source = ref (blank()) # the current show playlist source that can be monitored or controlled
+current_voice = ref ("") # name of current voice to use for synthesized DJ statements
 
-fadeout_trackend = ref false
-fadeout_instant = ref false
+fadeout_trackend = ref (false)
+fadeout_instant = ref (false)
 
-track_endtime = ref false
+track_endtime = ref (false)
 
-timed_command_queue = ref [] # [([commandname, arg], exec_unixtime), ...]
-trackend_command_queue = ref [] # [([commandname, arg], exec_delay_after_trackend), ...]
-pre_trackend_command_queue = ref [] # [([commandname, arg], exec_time_before_trackend), ...]
+timed_command_queue = ref ([]) # [([commandname, arg], exec_unixtime), ...]
+trackend_command_queue = ref ([]) # [([commandname, arg], exec_delay_after_trackend), ...]
+pre_trackend_command_queue = ref ([]) # [([commandname, arg], exec_time_before_trackend), ...]
 
 # command queue management functions
 
@@ -343,10 +357,10 @@ def set_fadeout_instant (arg) =
     end
 end
 
-playover_source = audio_to_stereo(request.queue(id="playover_source"))
+playover_source = request.queue(id="playover_source") # removed audio_to_stereo at v2.0
 
 def set_voice (voicename) =
-    newvoice = ref ""
+    newvoice = ref ("")
     if (voicename == "normal") then
         newvoice := station_default_voice
         showvoice = list.assoc(default="", !current_show_name, !show_voices)
@@ -385,7 +399,8 @@ end
 # show management functions (plus change_show queueable command)
 
 def shutdown_output() =
-    list.iter(source.shutdown, !current_output_source)
+#    list.iter(source.shutdown, !current_output_source)
+    current_output_source.shutdown()
 end
 
 def handle_track_end (offset, metadata) =
@@ -402,7 +417,7 @@ def output_new_show (show_name) =
     output_source =
         mksafe(
             smooth_add(delay=0.5, p=0.1, special=playover_source, normal=
-                crossfade(duration=5.0, #TODO make this (and offset below) a config parameter? per show ideally?
+                crossfade(duration=5.0, # TODO make this (and offset below) a config parameter? per show ideally?
                     on_offset(offset=0.0, handle_track_end,
                         switch( track_sensitive=false, [ ({!fadeout_instant == true}, blank()), ({true},
                             switch( track_sensitive=true, [ ({!fadeout_trackend == true}, blank()), ({true},
@@ -414,10 +429,10 @@ def output_new_show (show_name) =
             )
         )
     s = hout(id="scheduled_show_output", output_source)
-    current_output_source := [s]
+    current_output_source := s
 end
 
-def change_show(showname) =
+def change_show (showname) =
     if (list.assoc(default="error", showname, !show_paths) != "error") then
         log("CHANGING SHOW TO: " ^ showname)
         shutdown_output() # Can't be within output_new_show for reasons I can't figure out
@@ -554,9 +569,9 @@ add_timeout(0.1, command_loop)
 
 def dj_trackend_enqueue (input_string) =
     trimmed_input = string.trim(input_string)
-    command_name = ref ""
-    command_arg = ref ""
-    command_time = ref 0.0
+    command_name = ref ("")
+    command_arg = ref ("")
+    command_time = ref (0.0)
     input_list = string.split(separator=" ", trimmed_input)
     input_list_length = list.length(input_list)
     input_length = string.length(trimmed_input)
@@ -587,9 +602,9 @@ end
 
 def dj_timed_enqueue (input_string) =
     trimmed_input = string.trim(input_string)
-    command_name = ref ""
-    command_arg = ref ""
-    command_time = ref 0.0
+    command_name = ref ("")
+    command_arg = ref ("")
+    command_time = ref (0.0)
     input_list = string.split(separator=" ", trimmed_input)
     input_list_length = list.length(input_list)
     input_length = string.length(trimmed_input)
@@ -644,12 +659,12 @@ server.register(namespace="dj",
 
 # SET UP AUTOMATED HARBOR SOURCE CONTROL VIA SCHEDULE – AKA AUTO-DJ
 
-current_scheduled_show_name = ref ""
-current_scheduled_show_hour = ref 0
-current_scheduled_show_time = ref 0.0
-next_scheduled_show_name = ref ""
-next_scheduled_show_hour = ref 0
-next_scheduled_show_time = ref 0.0
+current_scheduled_show_name = ref ("")
+current_scheduled_show_hour = ref (0)
+current_scheduled_show_time = ref (0.0)
+next_scheduled_show_name = ref ("")
+next_scheduled_show_hour = ref (0)
+next_scheduled_show_time = ref (0.0)
 
 def update_current_next_shows () =
 
@@ -693,12 +708,12 @@ def update_current_next_shows () =
     end
 
     log("Updating current and next scheduled shows...")
-    todays_schedule_index = ref 0
-    todays_show_names = ref []
-    todays_show_hours = ref [0]
-    tomorrows_schedule_index = ref 0
-    tomorrows_show_names = ref []
-    tomorrows_show_hours = ref [0]
+    todays_schedule_index = ref (0)
+    todays_show_names = ref ([])
+    todays_show_hours = ref ([0])
+    tomorrows_schedule_index = ref (0)
+    tomorrows_show_names = ref ([])
+    tomorrows_show_hours = ref ([0])
 
     today_start_time = get_today_start_time()
     tomorrow_start_time = today_start_time + 86400.0
@@ -757,8 +772,8 @@ end
 # auto-dj control loop
 
 default_pulse = 2.0 # seconds between loops if there's no other need
-next_pulse = ref 0.0
-last_handled_hour_time = ref 0.0 # time of the last hour mark that was "handled" by show switch/station ID
+next_pulse = ref (0.0)
+last_handled_hour_time = ref (0.0) # time of the last hour mark that was "handled" by show switch/station ID
 
 def auto_dj_loop() =
     next_pulse := default_pulse

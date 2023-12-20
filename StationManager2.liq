@@ -154,9 +154,55 @@ list.iter(get_showschedule_intlists, showschedule_intlist_pairs)
 
 
 
+# --- BROADCAST --------------------------------------------------------------------
 
 
-# FUNCTIONS TO UPDATE LOG DATA ON NEW METADATA
+# SET UP BROADCAST USING SWITCHABLE HARBOR
+
+# create input harbor for broadcast
+
+set("harbor.bind_addr","0.0.0.0")
+# settings.harbor.bind_addr("0.0.0.0")  TEMP - CHANGE TO THIS INSTEAD OF ABOVE PROBABLY
+harbor_input_for_broadcast = input.harbor(
+    id="internal_input_harbor",
+    "broadcast-harbor",
+    port=station_harbor_port,
+    password=station_harbor_password )
+
+broadcast_source = mksafe(harbor_input_for_broadcast)
+
+output.icecast(id="broadcast_output",
+    station_output_encoding,
+    host = station_host, port = station_port,
+    password = station_icecast_password, mount = station_mount,
+    name = station_name,
+    description = station_description,
+    genre = station_genre,
+    url = station_url, broadcast_source)
+    
+    
+    
+    
+
+# --- SHOW CONTROL --------------------------------------------------------------------
+
+
+# BOOTSTRAP SHUTDOWN-ABLE OUTPUT SOURCE (TO HARBOR INPUT)
+
+bootstrap_source = output.icecast(
+    %wav,
+    host = "0.0.0.0",
+    port = station_harbor_port,
+    mount = "broadcast-harbor",
+    password = station_harbor_password,
+    blank() )
+
+current_output_source = ref(bootstrap_source)
+current_output_source_shutdown = ref(bootstrap_source.shutdown)
+
+
+
+# FUNCTIONS TO UPDATE LOG DATA ON NEW METADATA ON BROADCAST
 
 recent_tracks = ref ([])
 new_tracklog = ref ("")
@@ -189,10 +235,7 @@ def logtrack(metadata) =
 end
 
 
-
-
-
-# TIME FUNCTIONS
+# TIME FUNCTIONS FOR CONTROL BOARD
 
 def get_weekday_name(week_day_int) =
     daymapping = [
@@ -238,57 +281,6 @@ def get_today_start_time() =
     time_since_midnight = get_time_since_midnight()
     now - time_since_midnight
 end
-
-
-
-
-
-
-
-# SET UP BROADCAST USING SWITCHABLE HARBOR
-
-# create input harbor for broadcast
-
-    set("harbor.bind_addr","0.0.0.0")
-    # settings.harbor.bind_addr("0.0.0.0")  TEMP - CHANGE TO THIS INSTEAD OF ABOVE PROBABLY
-    harbor_input_for_broadcast = input.harbor(
-        id="internal_input_harbor",
-        "broadcast-harbor",
-        port=station_harbor_port,
-        password=station_harbor_password )
-    
-    # broadcast_source = mksafe(on_metadata(logtrack, harbor_input_for_broadcast))  OLD
-    broadcast_source = mksafe(harbor_input_for_broadcast)
-    harbor_input_for_broadcast.on_metadata(logtrack) # CHECK - this previously was part of line above... docs lying about this returning source, not unit?
-    
-    output.icecast(id="broadcast_output",
-        station_output_encoding,
-        host = station_host, port = station_port,
-        password = station_icecast_password, mount = station_mount,
-        name = station_name,
-        description = station_description,
-        genre = station_genre,
-        url = station_url, broadcast_source)
-    
-    
-    # bootstrap shutdownable output source to harbor input for show switching
-    
-    bootstrap_source = output.icecast(
-        %wav,
-        host = "0.0.0.0",
-        port = station_harbor_port,
-        mount = "broadcast-harbor",
-        password = station_harbor_password,
-        blank() )
-    
-    current_output_source = ref(bootstrap_source)
-    current_output_source_shutdown = ref(bootstrap_source.shutdown)
-    
-    
-    
-    
-
-
 
 
 
@@ -435,6 +427,8 @@ def output_new_show (show_name) =
     log("  --- New show starting: " ^ show_name ^ " ------------------------------------")
     show_path = list.assoc(default="error", show_name, !show_paths)
     show_source = playlist(id="scheduled_show_playlist", show_path)
+    # CHECK - this previously was part of line above... docs lying about this returning source, not unit?
+    show_source.on_metadata(logtrack)
     current_show_source := show_source
     # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
     new_output_source =
@@ -686,8 +680,8 @@ server.register(namespace="dj",
 
 
                 
-
-
+# --- AUTO DJ --------------------------------------------------------------------
+# TODO probably should move relevant json importing stuff down here
 
 # SET UP AUTOMATED HARBOR SOURCE CONTROL VIA SCHEDULE – AKA AUTO-DJ
 
@@ -739,7 +733,7 @@ def update_current_next_shows () =
         end
     end
 
-    log("Updating current and next scheduled shows...")
+    log(" *** AUTO-DJ: Updating current and next scheduled shows...")
     todays_schedule_index = ref (0)
     todays_show_names = ref ([])
     todays_show_hours = ref ([0])

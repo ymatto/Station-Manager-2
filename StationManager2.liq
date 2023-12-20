@@ -16,6 +16,7 @@ let json.parse stationconfig = stationconfig_file
 # TODO: Halt script if certain minimum things aren't set?
 # TODO: Consider better defaults and implications
 # TODO: These should maybe all be refs so that a new config file can be loaded runtime, and so they're okay even if not used
+# TODO: Consider instead of "null.get", using...  station_host = stationconfig.host ?? "localhost"
 
 station_name = null.get(default="", stationconfig.name)
 station_description = null.get(default="", stationconfig.description)
@@ -71,35 +72,45 @@ end
 # TODO should do show_names here too, just as a convenient list of keys for the other lists
 show_paths = ref ([]) # ("Beats", "files/Instrumental Hip-Hop"), ("Groovestyle", "files/Stylish Background"), ...
 show_longnames = ref ([]) # ("Beats", "Straight Beats"), ("Groovestyle", "Groovestyle"), ...
+show_descriptions = ref([]) # ("Beats", "instrumental hip-hop"), ("Groovestyle", "your personal soundtrack")
 show_voices = ref ([]) # ("Beats", "Whisper"), ("Groovestyle", "Ava"), ...
 show_signons = ref ([])
 show_signoffs = ref ([])
-show_shufflemodes = ref ([])
+show_shuffle_modes = ref ([])
 
 showconfig_file = file.contents(station_showconfig_path)
 
-showconfig = of_json(default=[ ( "error" , [("no show found", "")] ) ], showconfig_file)
+let json.parse (show_list : [(
+    string * {
+        playlist_path: string,
+        show_longname: string?,
+        show_description: string?,
+        DJ_voice: string?,
+        signon: string?, 
+        signoff: string?,
+        shuffle_mode: string?  
+    }
+)] as json.object ) = showconfig_file
 
 def get_show(thisshow) =
-  thisshowkey = fst(thisshow) # TODO <-- AKA this_show_name, see note above
-  thisshowdata = snd(thisshow)
+    thisshowkey = fst(thisshow) # TODO <-- AKA this_show_name, see note above
+    thisshowdata = snd(thisshow)
 
-  thisshowpath = list.assoc (default="error", "playlist_path", thisshowdata) # TODO: deal with failure better
-  show_paths := list.append([(thisshowkey, "#{!station_playlists_root}#{thisshowpath}")], !show_paths)
-  thisshowlongname = list.assoc (default="error", "show_longname", thisshowdata) # TODO: deal with failure better
-  show_longnames := list.append([(thisshowkey, thisshowlongname)], !show_longnames)
-  thisshowDJvoice = list.assoc (default="", "DJ_voice", thisshowdata)
-  show_voices := list.append([(thisshowkey, thisshowDJvoice)], !show_voices)
-  thissignon = list.assoc (default="", "signon", thisshowdata)
-  show_signons := list.append([(thisshowkey, thissignon)], !show_signons)
-  thissignoff = list.assoc (default="", "signoff", thisshowdata)
-  show_signoffs := list.append([(thisshowkey, thissignoff)], !show_signoffs)
-  thisshufflemode = list.assoc (default="songs", "shuffle_mode", thisshowdata) # TODO: make do something
-  show_shufflemodes := list.append([(thisshowkey, thisshufflemode)], !show_shufflemodes)
+    thisshowpath = thisshowdata.playlist_path # this is required - will fail if missing
+    show_paths := list.append([(thisshowkey, "#{!station_playlists_root}#{thisshowpath}")], !show_paths)
+    thisshowlongname = thisshowdata.show_longname ?? "error" # TODO: deal with failure better
+    show_longnames := list.append([(thisshowkey, thisshowlongname)], !show_longnames)
+    thisshowDJvoice = thisshowdata.DJ_voice ?? ""
+    show_voices := list.append([(thisshowkey, thisshowDJvoice)], !show_voices)
+    thissignon = thisshowdata.signon ?? ""
+    show_signons := list.append([(thisshowkey, thissignon)], !show_signons)
+    thissignoff = thisshowdata.signoff ?? ""
+    show_signoffs := list.append([(thisshowkey, thissignoff)], !show_signoffs)
+    thisshuffle_mode = thisshowdata.shuffle_mode ?? "songs" # TODO: make actually do something
+    show_shuffle_modes := list.append([(thisshowkey, thisshuffle_mode)], !show_shuffle_modes)
 end
 
-list.iter(get_show, showconfig)
-
+list.iter(get_show, show_list)
 
 
 

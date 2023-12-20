@@ -334,7 +334,7 @@ def sort_command_queue_by_time_descending(command_pair1, command_pair2) =
 end
 
 def timed_enqueue(command, exec_delay) = # command (list), exec_delay (float, seconds)
-    now = gettimeofday()
+    now = time()
     command_time = now + exec_delay # needs to be ref to be visible within func below?
     log("Timed DJ command received:         " ^ string_of(command) ^ " with execution set to " ^ string_of(exec_delay) ^ " seconds from now")
     command_pair = [(command, command_time)] # timed queue uses absolute times for execution
@@ -503,7 +503,7 @@ def execute_a_command(command) =
 end
 
 def process_timed_command_queue() =
-    now = gettimeofday()
+    now = time()
     def process_commands(this_command_pair) =
         this_command = fst(this_command_pair)
         this_command_time = snd(this_command_pair)
@@ -568,7 +568,7 @@ end
 # loop that executes commands out of queues at the proper time
 
 def command_loop() =
-    now = gettimeofday()
+    now = time()
     # check pre_trackend_command_queue
     track_remaining_time = source.remaining(!current_show_source)
     next_pre_trackend_time = snd(list.hd(default=(["", ""], -1.0), !pre_trackend_command_queue))
@@ -809,7 +809,7 @@ last_handled_hour_time = ref (0.0) # time of the last hour mark that was "handle
 
 def auto_dj_loop() =
     next_pulse := default_pulse
-    now = gettimeofday()
+    now = time()
     this_hour = get_current_hour()
 #    time_since_last_hour = get_time_since_last_hour()
     track_remaining_time = source.remaining(!current_show_source)

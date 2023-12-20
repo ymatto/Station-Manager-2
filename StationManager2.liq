@@ -169,8 +169,10 @@ end
 
 def logtrack(metadata) =
     # TODO don't log if the info is blank or "-" or whatever at show changes
-    # FIXME are backslashes before #'s okay? I added to make syntax highlighting not break...
-    newline="\#{metadata[\"artist\"]} - \#{metadata[\"album\"]} - \#{metadata[\"title\"]}"
+    artist = metadata["artist"]
+    album = metadata["album"]
+    title = metadata["title"]
+    newline="#{artist} - #{album} - #{title}"
     recent_tracks := list.add(newline, !recent_tracks)
     if (list.length(!recent_tracks) > 20) then
         recent_tracks := list.rev(list.tl(list.rev(!recent_tracks)))
@@ -185,30 +187,6 @@ def logtrack(metadata) =
         )
     )
 end
-
-
-
-
-
-# BUILD THE HARBOR SOURCE FOR SCHEDULED SHOW SWITCHING
-
-set("harbor.bind_addr","0.0.0.0")
-# settings.harbor.bind_addr("0.0.0.0")  FIXME - CHANGE BACK TO THIS
-scheduled_source = input.harbor(
-    id="internal_input_harbor",
-    "broadcast-harbor",
-    port=station_harbor_port,
-    password=station_harbor_password )
-
-hout = blank()
-
-output.icecast(
-    %wav,
-    host = "0.0.0.0",
-    port = station_harbor_port,
-    mount = "broadcast-harbor",
-    password = station_harbor_password,
-    hout ) # NOTE added at 2.1 update? seems to require some input source now?
 
 
 
@@ -266,12 +244,57 @@ end
 
 
 
+
+# SET UP BROADCAST USING SWITCHABLE HARBOR
+
+# create input harbor for broadcast
+
+    set("harbor.bind_addr","0.0.0.0")
+    # settings.harbor.bind_addr("0.0.0.0")  TEMP - CHANGE TO THIS INSTEAD OF ABOVE PROBABLY
+    harbor_input_for_broadcast = input.harbor(
+        id="internal_input_harbor",
+        "broadcast-harbor",
+        port=station_harbor_port,
+        password=station_harbor_password )
+    
+    # broadcast_source = mksafe(on_metadata(logtrack, harbor_input_for_broadcast))  OLD
+    broadcast_source = mksafe(harbor_input_for_broadcast)
+    harbor_input_for_broadcast.on_metadata(logtrack) # CHECK - this previously was part of line above... docs lying about this returning source, not unit?
+    
+    output.icecast(id="broadcast_output",
+        station_output_encoding,
+        host = station_host, port = station_port,
+        password = station_icecast_password, mount = station_mount,
+        name = station_name,
+        description = station_description,
+        genre = station_genre,
+        url = station_url, broadcast_source)
+    
+    
+    # bootstrap shutdownable output source to harbor input for show switching
+    
+    bootstrap_source = output.icecast(
+        %wav,
+        host = "0.0.0.0",
+        port = station_harbor_port,
+        mount = "broadcast-harbor",
+        password = station_harbor_password,
+        blank() )
+    
+    current_output_source = ref(bootstrap_source)
+    current_output_source_shutdown = ref(bootstrap_source.shutdown)
+    
+    
+    
+    
+
+
+
+
+
 # DJ CONTROL BOARD FUNCTIONS
 
 current_show_name = ref ("") # name of actual broadcasting show (independent of schedule - if there even is one)
-# broadcasting source that can be killed. hout(blank()) is to make sure the ref is explicitly an active_source
-# although as of 2.0.0 `active_source` type was removed and all output returns `unit`
-current_output_source = ref (hout)
 current_show_source = ref (blank()) # the current show playlist source that can be monitored or controlled
 current_voice = ref ("") # name of current voice to use for synthesized DJ statements
 
@@ -399,8 +422,8 @@ end
 # show management functions (plus change_show queueable command)
 
 def shutdown_output() =
-#    list.iter(source.shutdown, !current_output_source)
-    current_output_source.shutdown()
+    shut_this_down = !current_output_source_shutdown
+    shut_this_down()
 end
 
 def handle_track_end (offset, metadata) =
@@ -414,10 +437,9 @@ def output_new_show (show_name) =
     show_source = playlist(id="scheduled_show_playlist", show_path)
     current_show_source := show_source
     # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
-    output_source =
+    new_output_source =
         mksafe(
-            smooth_add(delay=0.5, p=0.1, special=playover_source, normal=
-                crossfade(duration=5.0, # TODO make this (and offset below) a config parameter? per show ideally?
+            smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, # TODO make this (and offset below) a config parameter? per show ideally?
                     on_offset(offset=0.0, handle_track_end,
                         switch( track_sensitive=false, [ ({!fadeout_instant == true}, blank()), ({true},
                             switch( track_sensitive=true, [ ({!fadeout_trackend == true}, blank()), ({true},
@@ -428,14 +450,21 @@ def output_new_show (show_name) =
                 )
             )
         )
-    s = hout(id="scheduled_show_output", output_source)
-    current_output_source := s
+    out = output.icecast(
+        %wav,
+        host = "0.0.0.0",
+        port = station_harbor_port,
+        mount = "broadcast-harbor",
+        password = station_harbor_password,
+        new_output_source )
+    current_output_source := out
+    current_output_source_shutdown := out.shutdown
 end
 
 def change_show (showname) =
     if (list.assoc(default="error", showname, !show_paths) != "error") then
         log("CHANGING SHOW TO: " ^ showname)
-        shutdown_output() # Can't be within output_new_show for reasons I can't figure out
+        shutdown_output() # TRY Maybe can put this directly into output_new_show now....
         output_new_show(showname)
         current_show_name := showname
         current_show_longname = list.assoc(default="", showname, !show_longnames)
@@ -656,6 +685,9 @@ server.register(namespace="dj",
 
 
 
+                
+
+
 
 # SET UP AUTOMATED HARBOR SOURCE CONTROL VIA SCHEDULE – AKA AUTO-DJ
 
@@ -858,20 +890,3 @@ add_timeout(0.0, auto_dj_loop) # start it up!! # TODO make starting it up option
 
 
 
-
-
-
-
-# BUILD THE BROADCAST OUTPUT
-
-broadcast_source = mksafe(on_metadata(logtrack, scheduled_source))
-
-# CREATE THE STREAM
-output.icecast(id="broadcast_output",
-    station_output_encoding,
-    host = station_host, port = station_port,
-    password = station_icecast_password, mount = station_mount,
-    name = station_name,
-    description = station_description,
-    genre = station_genre,
-    url = station_url, broadcast_source)

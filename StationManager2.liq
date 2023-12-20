@@ -3,47 +3,45 @@
 # ie.: /Users/omm/Basscadet/StationManager2.liq -- stationconfig.json
 # NOTE if this is being run by launchd on the mac, voice synthesis requires it run as an agent, not a daemon (because "say" is a GUI app)
 
+
+
 # LOAD STATIONCONFIG
 
 # TODO: Halt script if certain minimum things aren't set?
 
 stationconfig_file = file.contents(argv(default="", 1)) # TODO: allow script to proceed with defaults without argv?
-station_config_strings = of_json(default=[("error", "no station config")], stationconfig_file)
-station_config_ints = of_json(default=[("", 0)], stationconfig_file)
-station_config_bools = of_json(default=[("", false)], stationconfig_file)
 
-if station_config_strings["error"] == "no station config" then
-  log("station config invalid")
-end
+let json.parse stationconfig = stationconfig_file
 
+# TODO: Halt script if certain minimum things aren't set?
+# TODO: Consider better defaults and implications
+# TODO: These should maybe all be refs so that a new config file can be loaded runtime, and so they're okay even if not used
+
+station_name = null.get(default="", stationconfig.name)
+station_description = null.get(default="", stationconfig.description)
+station_spoken_ID = null.get(default="", stationconfig.spoken_ID)
+station_voice_type = null.get(default="", stationconfig.voice_type)
+station_default_voice = null.get(default="", stationconfig.default_voice)
+station_log_path = null.get(default="", stationconfig.log_path)
+station_tracklog_path = null.get(default="", stationconfig.tracklog_path)
+station_currentshow_path = null.get(default="", stationconfig.currentshow_path)
 %include "encoding_formats.liq"
-
-# TODO: These should all use list.assoc to have specified defaults when not specified in config file
-# TODO: These should all be refs so that a new config file can be loaded runtime, and so they're okay even if not used
-station_name = station_config_strings["name"]
-station_description = station_config_strings["description"]
-station_spoken_ID = station_config_strings["spoken_ID"]
-station_voice_type = station_config_strings["voice_type"]
-station_default_voice = station_config_strings["default_voice"]
-station_log_path = station_config_strings["log_path"]
-station_tracklog_path = station_config_strings["tracklog_path"]
-station_currentshow_path = station_config_strings["currentshow_path"]
-station_output_encoding = list.assoc(default=%mp3, list.assoc(default="mp3_128", "output_encoding", station_config_strings), encoding_formats)
-station_host = list.assoc(default="localhost", "host", station_config_strings)
-station_port = list.assoc(default=8000, "port", station_config_ints)
-station_mount = list.assoc(default="radio.mp3", "mount", station_config_strings)
-station_genre = list.assoc(default="", "genre", station_config_strings)
-station_url = list.assoc(default="", "url", station_config_strings)
-station_playlists_root = ref (station_config_strings["playlists_root"]) # FIX: better way than using ref?
-station_showconfig_path = station_config_strings["showconfig_path"]
-station_showschedule_path = station_config_strings["showschedule_path"]
-station_icecast_password = station_config_strings["icecast_password"]
-station_telnet_server = list.assoc(default=false, "telnet_server", station_config_bools)
-station_telnet_server_port = list.assoc(default=1234, "telnet_server_port", station_config_ints)
-station_telnet_server_timeout = float_of_int(list.assoc(default=30, "telnet_server_timeout", station_config_ints))
-station_telnet_server_netmask = list.assoc(default="0.0.0.0", "telnet_server_netmask", station_config_strings)
-station_harbor_port = list.assoc(default=station_port+10, "harbor_port", station_config_ints)
-station_harbor_password = list.assoc(default=station_icecast_password^string_of(random.int()), "harbor_password", station_config_strings)
+station_output_encoding = list.assoc(default=%mp3, null.get(default="mp3_128", stationconfig.output_encoding), encoding_formats)
+station_host = null.get(default="localhost", stationconfig.host)
+station_port = null.get(default=8000, stationconfig.port)
+station_mount = null.get(default="radio.mp3", stationconfig.mount)
+station_genre = null.get(default="", stationconfig.genre)
+station_url = null.get(default="", stationconfig.url)
+station_playlists_root = ref (null.get(default="", stationconfig.playlists_root)) # FIX: better way than using ref?
+station_showconfig_path = null.get(default="", stationconfig.showconfig_path)
+station_showschedule_path = null.get(default="", stationconfig.showschedule_path)
+station_icecast_password = null.get(default="", stationconfig.icecast_password)
+station_telnet_server = null.get(default=false, stationconfig.telnet_server)
+station_telnet_server_port = null.get(default=1234, stationconfig.telnet_server_port)
+station_telnet_server_timeout = float_of_int(null.get(default=30, stationconfig.telnet_server_timeout))
+station_telnet_server_netmask = null.get(default="0.0.0.0", stationconfig.telnet_server_netmask)
+station_harbor_port = null.get(default=station_port+10, stationconfig.harbor_port)
+station_harbor_password = null.get(default=station_icecast_password^string_of(random.int()), stationconfig.harbor_password)
 
 # Logs setup
 # FIX REVERSE WHAT'S COMMENTED
@@ -79,6 +77,7 @@ show_signoffs = ref ([])
 show_shufflemodes = ref ([])
 
 showconfig_file = file.contents(station_showconfig_path)
+
 showconfig = of_json(default=[ ( "error" , [("no show found", "")] ) ], showconfig_file)
 
 def get_show(thisshow) =

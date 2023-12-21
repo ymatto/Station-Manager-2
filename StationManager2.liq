@@ -45,16 +45,10 @@ station_harbor_port = null.get(default=station_port+10, stationconfig.harbor_por
 station_harbor_password = null.get(default=station_icecast_password^string_of(random.int()), stationconfig.harbor_password)
 
 # Logs setup
-# FIX REVERSE WHAT'S COMMENTED
-# set("log.file.path",station_log_path)
 settings.log.file.path.set(station_log_path)
 
 # Server setup
 if (station_telnet_server) then
-#    set("server.telnet", station_telnet_server)
-#    set("server.telnet.port", station_telnet_server_port)
-#    set("server.telnet.bind_addr", station_telnet_server_netmask)
-#    set("server.timeout", station_telnet_server_timeout) # negative value disables timeout
     settings.server.telnet.set(station_telnet_server)
     settings.server.telnet.port.set(station_telnet_server_port)
     settings.server.telnet.bind_addr.set(station_telnet_server_netmask)
@@ -161,7 +155,6 @@ list.iter(get_showschedule, showschedule_list)
 
 # create input harbor for broadcast
 
-# set("harbor.bind_addr","0.0.0.0")
 settings.harbor.bind_addrs.set(["0.0.0.0"])
 harbor_input_for_broadcast = input.harbor(
     id="internal_input_harbor",
@@ -396,16 +389,17 @@ def say (text) =
     else
         if (station_voice_type == "mac") then
             # NOTE The 4000ms of silence is to copensate for the fade time on the playover_source
-            command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v " ^ !current_voice ^ " \"[[ slnc 4000 ]] " ^ text ^ " \""
-            process_return = run_process(timeout = 20.0, command_string)
-            if (process_return != ("","",("exit", "0"))) then
-                log("SAY DJ COMMAND FAILED: " ^ string_of(process_return))
+            command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v \"" ^ !current_voice ^ "\" \"[[ slnc 4000 ]] " ^ text ^ " [[ slnc 1000 ]]\""
+            process_return = process.run(timeout = 30.0, command_string)
+            if (process_return.stderr != "") then
+                log("SAY DJ COMMAND FAILED:")
+                log("#{process_return.stderr}")
             else
                 log("SPEAKING [" ^ !current_voice ^ "]: " ^ text)
                 ignore(server.execute("playover_source.push " ^ speech_filename)) # NOTE Likely will change in later version of LiquidSoap
             end
         else
-            log("Station voice_type not set to supported speech synthesizer. Say ignored.")
+            log("Station voice_type not set to supported speech synthesizer. SAY command ignored.")
         end
     end
 end
@@ -492,7 +486,10 @@ def execute_a_command(command) =
         say(command_arg)
     elsif (command_name == "set_voice") then
         set_voice(command_arg)
+    else
+        log("   \"#{command_name}\" is not a supported command!")
     end
+    log("   command executed...")
     #TODO moar commands
 end
 

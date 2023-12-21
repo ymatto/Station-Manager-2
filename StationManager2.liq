@@ -128,39 +128,29 @@ showschedule_show_hours = ref ([]) # [0, 7, 16], [0, 12], ...
 
 showschedule_file = file.contents(station_showschedule_path)
 
-showschedule_string_pairs = of_json(                         # types
-    default=[ [ ("strings_error", "") ] ],
-    showschedule_file
-    )
-showschedule_stringlist_pairs = of_json(                    # days, show_names
-    default=[ [ ("stringarrays_error", [ "" ]) ] ],
-    showschedule_file
-    )
-showschedule_intlist_pairs = of_json(                       # show_hours
-    default=[ [ ("intarrays_error", [ 0 ]) ] ],
-    showschedule_file
-    )
+let json.parse (showschedule_list : [{
+        type: string,
+        days: [string],
+        show_names: [string],
+        show_hours: [int]
+    }]
+) = showschedule_file
 
-def get_showschedule_strings(string_pairs) =
-    this_type = list.assoc (default="everyday", "type", string_pairs) # TODO: check default handling?
+def get_showschedule(thisshowschedule) =
+    this_type = thisshowschedule.type ?? "everyday" # TODO: check default handling?
     showschedule_types := list.append([this_type], !showschedule_types)
-end
-
-def get_showschedule_stringlists(stringlist_pairs) =
-    this_days = list.assoc (default=[""], "days", stringlist_pairs) # TODO: check default handling?
+    this_days = thisshowschedule.days ?? [""] # TODO: check default handling?
     showschedule_days := list.append([this_days], !showschedule_days)
-    this_show_names = list.assoc (default=[""], "show_names", stringlist_pairs) # TODO: make a blank or something
+    this_show_names = thisshowschedule.show_names ?? [""] # TODO: check default handling?
     showschedule_show_names := list.append([this_show_names], !showschedule_show_names)
-end
-
-def get_showschedule_intlists(intarray_pairs) =
-    this_show_hours = list.assoc (default=[0], "show_hours", intarray_pairs) # TODO: check default handling?
+    this_show_hours = thisshowschedule.show_hours ?? [0] # TODO: check default handling?
     showschedule_show_hours := list.append([this_show_hours], !showschedule_show_hours)
 end
+    
+list.iter(get_showschedule, showschedule_list)
 
-list.iter(get_showschedule_strings, showschedule_string_pairs)
-list.iter(get_showschedule_stringlists, showschedule_stringlist_pairs)
-list.iter(get_showschedule_intlists, showschedule_intlist_pairs)
+
+
 
 
 
@@ -428,7 +418,7 @@ def shutdown_output() =
     shut_this_down()
 end
 
-def handle_track_end (offset, metadata) =
+def handle_track_end (offset, metadata) = # TODO figure out how to ignore these required handler parameters
     log("  - track change signal -")
     track_endtime := true # triggers the command_loop
 end

@@ -12,7 +12,13 @@ some_list_json = '{
 }'
 
     
-let json.parse (show_list : [(string * {signon: string, signoff: string})] as json.object) = some_list_json
+let json.parse (show_list : [(
+    string * {
+        signon: string,
+        signoff: string
+    })]
+    as json.object
+) = some_list_json
 
 
 # show_list = [
@@ -24,7 +30,7 @@ let json.parse (show_list : [(string * {signon: string, signoff: string})] as js
 def get_show(thisshow) =
     thisshowkey = fst(thisshow)
     thisshowdata = snd(thisshow)
-    # print("thisshowdata:     #{thisshowdata}")
+    print("thisshowdata:     #{thisshowdata}")
     
     print("name:        #{thisshowkey}")
     print("signon:      #{thisshowdata.signon}")

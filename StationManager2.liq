@@ -412,11 +412,6 @@ end
 
 # show management functions (plus change_show queueable command)
 
-def shutdown_output() =
-    shut_this_down = !current_output_source_shutdown
-    shut_this_down()
-end
-
 def handle_track_end (offset, metadata) = # TODO figure out how to ignore these required handler parameters
     log("  - track change signal -")
     track_endtime := true # triggers the command_loop
@@ -424,6 +419,8 @@ end
 
 def output_new_show (show_name) =
     log("  --- New show starting: " ^ show_name ^ " ------------------------------------")
+    shut_this_down = !current_output_source_shutdown
+    shut_this_down()
     show_path = list.assoc(default="error", show_name, !show_paths)
     show_source = playlist(id="scheduled_show_playlist", show_path)
     # CHECK - this previously was part of line above... docs lying about this returning source, not unit?
@@ -457,7 +454,6 @@ end
 def change_show (showname) =
     if (list.assoc(default="error", showname, !show_paths) != "error") then
         log("CHANGING SHOW TO: " ^ showname)
-        shutdown_output() # TRY Maybe can put this directly into output_new_show now....
         output_new_show(showname)
         current_show_name := showname
         current_show_longname = list.assoc(default="", showname, !show_longnames)

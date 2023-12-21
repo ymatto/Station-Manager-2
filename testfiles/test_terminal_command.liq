@@ -6,7 +6,7 @@ speech_filename = "speech.wav"
 
 text = "hello everybody."
 
-command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v " ^ !current_voice ^ " \"[[ slnc 4000 ]] " ^ text ^ " \""
+command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v \"" ^ !current_voice ^ "\" \"[[ slnc 4000 ]] " ^ text ^ " \""
 process_return = process.run(timeout = 20.0, command_string) # the new style
 
 print("process returned:  #{process_return}")

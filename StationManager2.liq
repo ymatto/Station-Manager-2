@@ -389,7 +389,7 @@ def say (text) =
     else
         if (station_voice_type == "mac") then
             # NOTE The 4000ms of silence is to copensate for the fade time on the playover_source
-            command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v " ^ !current_voice ^ " \"[[ slnc 4000 ]] " ^ text ^ " [[ slnc 1000 ]]\""
+            command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v \"" ^ !current_voice ^ "\" \"[[ slnc 4000 ]] " ^ text ^ " [[ slnc 1000 ]]\""
             process_return = process.run(timeout = 30.0, command_string)
             if (process_return.stderr != "") then
                 log("SAY DJ COMMAND FAILED:")

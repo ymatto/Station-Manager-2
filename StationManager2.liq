@@ -7,8 +7,6 @@
 
 # LOAD STATIONCONFIG
 
-# TODO: Halt script if certain minimum things aren't set?
-
 stationconfig_file = file.contents(argv(default="", 1)) # TODO: allow script to proceed with defaults without argv?
 
 let json.parse stationconfig = stationconfig_file
@@ -16,33 +14,32 @@ let json.parse stationconfig = stationconfig_file
 # TODO: Halt script if certain minimum things aren't set?
 # TODO: Consider better defaults and implications
 # TODO: These should maybe all be refs so that a new config file can be loaded runtime, and so they're okay even if not used
-# TODO: Consider instead of "null.get", using...  station_host = stationconfig.host ?? "localhost"
 
-station_name = null.get(default="", stationconfig.name)
-station_description = null.get(default="", stationconfig.description)
-station_spoken_ID = null.get(default="", stationconfig.spoken_ID)
-station_voice_type = null.get(default="", stationconfig.voice_type)
-station_default_voice = null.get(default="", stationconfig.default_voice)
-station_log_path = null.get(default="", stationconfig.log_path)
-station_tracklog_path = null.get(default="", stationconfig.tracklog_path)
-station_currentshow_path = null.get(default="", stationconfig.currentshow_path)
+station_name = stationconfig.name ?? ""
+station_description = stationconfig.description ?? ""
+station_spoken_ID = stationconfig.spoken_ID ?? ""
+station_voice_type = stationconfig.voice_type ?? ""
+station_default_voice = stationconfig.default_voice ?? ""
+station_log_path = stationconfig.log_path ?? ""
+station_tracklog_path = stationconfig.tracklog_path ?? ""
+station_currentshow_path = stationconfig.currentshow_path ?? ""
 %include "encoding_formats.liq"
-station_output_encoding = list.assoc(default=%mp3, null.get(default="mp3_128", stationconfig.output_encoding), encoding_formats)
-station_host = null.get(default="localhost", stationconfig.host)
-station_port = null.get(default=8000, stationconfig.port)
-station_mount = null.get(default="radio.mp3", stationconfig.mount)
-station_genre = null.get(default="", stationconfig.genre)
-station_url = null.get(default="", stationconfig.url)
-station_playlists_root = ref (null.get(default="", stationconfig.playlists_root)) # FIX: better way than using ref?
-station_showconfig_path = null.get(default="", stationconfig.showconfig_path)
-station_showschedule_path = null.get(default="", stationconfig.showschedule_path)
-station_icecast_password = null.get(default="", stationconfig.icecast_password)
-station_telnet_server = null.get(default=false, stationconfig.telnet_server)
-station_telnet_server_port = null.get(default=1234, stationconfig.telnet_server_port)
-station_telnet_server_timeout = float_of_int(null.get(default=30, stationconfig.telnet_server_timeout))
-station_telnet_server_netmask = null.get(default="0.0.0.0", stationconfig.telnet_server_netmask)
-station_harbor_port = null.get(default=station_port+10, stationconfig.harbor_port)
-station_harbor_password = null.get(default=station_icecast_password^string_of(random.int()), stationconfig.harbor_password)
+station_output_encoding = list.assoc(default=%mp3, stationconfig.output_encoding ?? "mp3_128", encoding_formats)
+station_host = stationconfig.host ?? "localhost"
+station_port = stationconfig.port ?? 8000
+station_mount = stationconfig.mount ?? "radio.mp3"
+station_genre = stationconfig.genre ?? ""
+station_url = stationconfig.url ?? ""
+station_playlists_root = ref (stationconfig.playlists_root ?? "") # FIX: better way than using ref?
+station_showconfig_path = stationconfig.showconfig_path ?? ""
+station_showschedule_path = stationconfig.showschedule_path ?? ""
+station_icecast_password = stationconfig.icecast_password ?? ""
+station_telnet_server = stationconfig.telnet_server ?? false
+station_telnet_server_port = stationconfig.telnet_server_port ?? 1234
+station_telnet_server_timeout = float_of_int(stationconfig.telnet_server_timeout ?? 60)
+station_telnet_server_netmask = stationconfig.telnet_server_netmask ?? "0.0.0.0"
+station_harbor_port = stationconfig.harbor_port ?? station_port+10
+station_harbor_password = stationconfig.harbor_password ?? station_icecast_password^string_of(random.int())
 
 # Logs setup
 settings.log.file.path.set(station_log_path)
@@ -385,11 +382,11 @@ end
 def say (text) =
     speech_filename = file.temp("SM2_speech_", ".wav")
     if (!current_voice == "") then
-        log("No voice configured. Say ignored.")
+        log("No voice configured. \"SAY\" command ignored.")
     else
         if (station_voice_type == "mac") then
-            # NOTE The 4000ms of silence is to copensate for the fade time on the playover_source
-            command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v \"" ^ !current_voice ^ "\" \"[[ slnc 4000 ]] " ^ text ^ " [[ slnc 1000 ]]\""
+            # NOTE The 3500ms of silence is to compensate for the fade time on the playover_source
+            command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v \"" ^ !current_voice ^ "\" \"[[ slnc 3500 ]] " ^ text ^ " [[ slnc 1000 ]]\""
             process_return = process.run(timeout = 30.0, command_string)
             if (process_return.stderr != "") then
                 log("SAY DJ COMMAND FAILED:")
@@ -404,13 +401,13 @@ def say (text) =
     end
 end
 
+def skip () =
+    source.skip(!current_show_source) 
+    log("Skipping to next track in playlist!")
+end
+
 
 # show management functions (plus change_show queueable command)
-
-def shutdown_output() =
-    shut_this_down = !current_output_source_shutdown
-    shut_this_down()
-end
 
 def handle_track_end (offset, metadata) = # TODO figure out how to ignore these required handler parameters
     log("  - track change signal -")
@@ -419,10 +416,11 @@ end
 
 def output_new_show (show_name) =
     log("  --- New show starting: " ^ show_name ^ " ------------------------------------")
+    shut_this_down = !current_output_source_shutdown
+    shut_this_down()
     show_path = list.assoc(default="error", show_name, !show_paths)
     show_source = playlist(id="scheduled_show_playlist", show_path)
-    # CHECK - this previously was part of line above... docs lying about this returning source, not unit?
-    show_source.on_metadata(logtrack)
+    show_source.on_metadata(logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
     current_show_source := show_source
     # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
     new_output_source =
@@ -452,7 +450,6 @@ end
 def change_show (showname) =
     if (list.assoc(default="error", showname, !show_paths) != "error") then
         log("CHANGING SHOW TO: " ^ showname)
-        shutdown_output() # TRY Maybe can put this directly into output_new_show now....
         output_new_show(showname)
         current_show_name := showname
         current_show_longname = list.assoc(default="", showname, !show_longnames)
@@ -486,10 +483,11 @@ def execute_a_command(command) =
         say(command_arg)
     elsif (command_name == "set_voice") then
         set_voice(command_arg)
+    elsif (command_name == "skip") then
+        skip()
     else
         log("   \"#{command_name}\" is not a supported command!")
     end
-    log("   command executed...")
     #TODO moar commands
 end
 
@@ -657,7 +655,8 @@ server.register(namespace="dj",
                             "      set_fadeout_trackend [true/false]\n" ^
                             "      set_fadeout_instant [true/false]\n" ^
                             "      say [statement]\n" ^
-                            "      set_voice [voice name]\n",
+                            "      set_voice [voice name]\n" ^
+                            "      skip\n",
                 "trackend",
                 dj_trackend_enqueue)
 
@@ -669,7 +668,8 @@ server.register(namespace="dj",
                             "      set_fadeout_trackend [true/false]\n" ^
                             "      set_fadeout_instant [true/false]\n" ^
                             "      say [statement]\n" ^
-                            "      set_voice [voice name]\n",
+                            "      set_voice [voice name]\n" ^
+                            "      skip\n",
                 "now",
                 dj_timed_enqueue)
 

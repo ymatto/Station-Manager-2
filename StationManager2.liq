@@ -385,7 +385,7 @@ end
 def say (text) =
     speech_filename = file.temp("SM2_speech_", ".wav")
     if (!current_voice == "") then
-        log("No voice configured. Say ignored.")
+        log("No voice configured. \"SAY\" command ignored.")
     else
         if (station_voice_type == "mac") then
             # NOTE The 4000ms of silence is to copensate for the fade time on the playover_source
@@ -402,6 +402,11 @@ def say (text) =
             log("Station voice_type not set to supported speech synthesizer. SAY command ignored.")
         end
     end
+end
+
+def skip () =
+    source.skip(!current_show_source) 
+    log("Skipping to next track in playlist!")
 end
 
 
@@ -486,10 +491,11 @@ def execute_a_command(command) =
         say(command_arg)
     elsif (command_name == "set_voice") then
         set_voice(command_arg)
+    elsif (command_name == "skip") then
+        skip()
     else
         log("   \"#{command_name}\" is not a supported command!")
     end
-    log("   command executed...")
     #TODO moar commands
 end
 
@@ -657,7 +663,8 @@ server.register(namespace="dj",
                             "      set_fadeout_trackend [true/false]\n" ^
                             "      set_fadeout_instant [true/false]\n" ^
                             "      say [statement]\n" ^
-                            "      set_voice [voice name]\n",
+                            "      set_voice [voice name]\n" ^
+                            "      skip\n",
                 "trackend",
                 dj_trackend_enqueue)
 
@@ -669,7 +676,8 @@ server.register(namespace="dj",
                             "      set_fadeout_trackend [true/false]\n" ^
                             "      set_fadeout_instant [true/false]\n" ^
                             "      say [statement]\n" ^
-                            "      set_voice [voice name]\n",
+                            "      set_voice [voice name]\n" ^
+                            "      skip\n",
                 "now",
                 dj_timed_enqueue)
 

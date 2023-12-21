@@ -45,16 +45,10 @@ station_harbor_port = null.get(default=station_port+10, stationconfig.harbor_por
 station_harbor_password = null.get(default=station_icecast_password^string_of(random.int()), stationconfig.harbor_password)
 
 # Logs setup
-# FIX REVERSE WHAT'S COMMENTED
-# set("log.file.path",station_log_path)
 settings.log.file.path.set(station_log_path)
 
 # Server setup
 if (station_telnet_server) then
-#    set("server.telnet", station_telnet_server)
-#    set("server.telnet.port", station_telnet_server_port)
-#    set("server.telnet.bind_addr", station_telnet_server_netmask)
-#    set("server.timeout", station_telnet_server_timeout) # negative value disables timeout
     settings.server.telnet.set(station_telnet_server)
     settings.server.telnet.port.set(station_telnet_server_port)
     settings.server.telnet.bind_addr.set(station_telnet_server_netmask)
@@ -161,7 +155,6 @@ list.iter(get_showschedule, showschedule_list)
 
 # create input harbor for broadcast
 
-# set("harbor.bind_addr","0.0.0.0")
 settings.harbor.bind_addrs.set(["0.0.0.0"])
 harbor_input_for_broadcast = input.harbor(
     id="internal_input_harbor",

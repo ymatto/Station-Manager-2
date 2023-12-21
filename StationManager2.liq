@@ -582,7 +582,7 @@ def command_loop() =
     0.1
 end
 
-add_timeout(0.1, command_loop)
+thread.run.recurrent(delay=0.1, command_loop)
 
 
 
@@ -880,7 +880,7 @@ end
 # TODO: make initiating and halting the DJ control loop control board functions
 
 log(" *** Initiating AUTO-DJ...")
-add_timeout(0.0, auto_dj_loop) # start it up!! # TODO make starting it up optional
+thread.run.recurrent(delay=0.0, auto_dj_loop) # start it up!! # TODO make starting it up optional
 
 
 

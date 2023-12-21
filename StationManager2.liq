@@ -7,8 +7,6 @@
 
 # LOAD STATIONCONFIG
 
-# TODO: Halt script if certain minimum things aren't set?
-
 stationconfig_file = file.contents(argv(default="", 1)) # TODO: allow script to proceed with defaults without argv?
 
 let json.parse stationconfig = stationconfig_file
@@ -16,7 +14,6 @@ let json.parse stationconfig = stationconfig_file
 # TODO: Halt script if certain minimum things aren't set?
 # TODO: Consider better defaults and implications
 # TODO: These should maybe all be refs so that a new config file can be loaded runtime, and so they're okay even if not used
-# TODO: Consider instead of "null.get", using...  station_host = stationconfig.host ?? "localhost"
 
 station_name = stationconfig.name ?? ""
 station_description = stationconfig.description ?? ""
@@ -388,8 +385,8 @@ def say (text) =
         log("No voice configured. \"SAY\" command ignored.")
     else
         if (station_voice_type == "mac") then
-            # NOTE The 4000ms of silence is to copensate for the fade time on the playover_source
-            command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v \"" ^ !current_voice ^ "\" \"[[ slnc 4000 ]] " ^ text ^ " [[ slnc 1000 ]]\""
+            # NOTE The 3500ms of silence is to compensate for the fade time on the playover_source
+            command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v \"" ^ !current_voice ^ "\" \"[[ slnc 3500 ]] " ^ text ^ " [[ slnc 1000 ]]\""
             process_return = process.run(timeout = 30.0, command_string)
             if (process_return.stderr != "") then
                 log("SAY DJ COMMAND FAILED:")
@@ -423,8 +420,7 @@ def output_new_show (show_name) =
     shut_this_down()
     show_path = list.assoc(default="error", show_name, !show_paths)
     show_source = playlist(id="scheduled_show_playlist", show_path)
-    # CHECK - this previously was part of line above... docs lying about this returning source, not unit?
-    show_source.on_metadata(logtrack)
+    show_source.on_metadata(logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
     current_show_source := show_source
     # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
     new_output_source =

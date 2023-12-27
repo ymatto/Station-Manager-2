@@ -469,6 +469,7 @@ def change_show (showname) =
         shutdown_current_output()
 
         # HACK starting the new output with a delay to hopefully give enough time for the shutdown thread to reliably finish
+        # TODO With LS 2.2, can probably move to just using a thread.pause rather than kick off this other thread...
         requested_showname := showname
         thread.run(delay=0.5, output_new_show)
 

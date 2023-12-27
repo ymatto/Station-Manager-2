@@ -159,7 +159,7 @@ harbor_input_for_broadcast = input.harbor(
     port=station_harbor_port,
     password=station_harbor_password )
 
-broadcast_source = mksafe(harbor_input_for_broadcast)
+broadcast_source = mksafe(id="broadcast_source_from_harbor", harbor_input_for_broadcast)
 
 output.icecast(id="broadcast_output",
     station_output_encoding,
@@ -436,9 +436,10 @@ def output_new_show () =
     current_show_source := show_source
 
     # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
+    # TODO make the smooth_add stuff (and offset below) a config parameter? per show ideally?
     new_output_source =
-        mksafe(
-            smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, # TODO make this (and offset below) a config parameter? per show ideally?
+        mksafe(id="switchboard_source",
+            smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, 
                     on_offset(offset=0.0, handle_track_end,
                         switch( track_sensitive=false, [ ({!fadeout_instant == true}, blank()), ({true},
                             switch( track_sensitive=true, [ ({!fadeout_trackend == true}, blank()), ({true},
@@ -449,7 +450,7 @@ def output_new_show () =
                 )
             )
         )
-    out = output.icecast(
+    out = output.icecast(id="output_to_harbor",
         %wav,
         host = "0.0.0.0",
         port = station_harbor_port,

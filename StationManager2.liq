@@ -179,7 +179,8 @@ output.icecast(id="broadcast_output",
 
 # BOOTSTRAP SHUTDOWN-ABLE OUTPUT SOURCE (TO HARBOR INPUT)
 
-bootstrap_source = output.icecast(
+#TODO - this is deuplicate code to output_new_show... separate out a func to call that's the same as changing shows
+bootstrap_out = output.icecast(
     %wav,
     host = "0.0.0.0",
     port = station_harbor_port,
@@ -187,8 +188,8 @@ bootstrap_source = output.icecast(
     password = station_harbor_password,
     blank() )
 
-current_output_source = ref(bootstrap_source)
-current_output_source_shutdown = ref(bootstrap_source.shutdown)
+current_output_source = ref(bootstrap_out)
+current_output_source_shutdown = ref(bootstrap_out.shutdown)
 
 
 
@@ -376,7 +377,7 @@ def set_voice (voicename) =
         newvoice := voicename
     end
     current_voice := !newvoice
-    log("New voice selected: " ^ !newvoice)
+    log("   New voice selected: " ^ !newvoice)
 end
 
 def say (text) =
@@ -410,18 +411,30 @@ end
 # show management functions (plus change_show queueable command)
 
 def handle_track_end (offset, metadata) = # TODO figure out how to ignore these required handler parameters
+    # TODO before totally ignoring the metadata data here... it seems to include album art? Use with webpage? If the "logtrack" stuff can't?
     log("  - track change signal -")
     track_endtime := true # triggers the command_loop
 end
 
-def output_new_show (show_name) =
-    log("  --- New show starting: " ^ show_name ^ " ------------------------------------")
+def shutdown_current_output ()
+    log("   Shutting down current show....")
     shut_this_down = !current_output_source_shutdown
-    shut_this_down()
+    # NOTE - this kicks off some async process that takes some time to complete... was causing issues
+    # this is why I use the thread.run with a 0.5s delay below to make sure this finishes
+    shut_this_down() 
+end
+
+requested_showname = ref("")
+
+def output_new_show () =
+    show_name = !requested_showname
+    log("   Outputting new show: " ^ show_name)
+
     show_path = list.assoc(default="error", show_name, !show_paths)
     show_source = playlist(id="scheduled_show_playlist", show_path)
     show_source.on_metadata(logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
     current_show_source := show_source
+
     # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
     new_output_source =
         mksafe(
@@ -445,12 +458,20 @@ def output_new_show (show_name) =
         new_output_source )
     current_output_source := out
     current_output_source_shutdown := out.shutdown
+
+    requested_showname := ""
+
 end
 
 def change_show (showname) =
     if (list.assoc(default="error", showname, !show_paths) != "error") then
-        log("CHANGING SHOW TO: " ^ showname)
-        output_new_show(showname)
+        log("  --- New show starting: " ^ showname ^ " ------------------------------------")
+        shutdown_current_output()
+
+        # HACK starting the new output with a delay to hopefully give enough time for the shutdown thread to reliably finish
+        requested_showname := showname
+        thread.run(delay=0.5, output_new_show)
+
         current_show_name := showname
         current_show_longname = list.assoc(default="", showname, !show_longnames)
         set_voice("normal")

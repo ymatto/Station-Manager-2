@@ -159,6 +159,8 @@ harbor_input_for_broadcast = input.harbor(
     port=station_harbor_port,
     password=station_harbor_password )
 
+# FIXME - !!! For some reason the mksafe here is triggering, going to blank, when everything seems to be fine... middle of tracks even
+# Recreating the input to the harbor seems to resolve it... what's going on?
 broadcast_source = mksafe(id="broadcast_source_from_harbor", harbor_input_for_broadcast)
 
 output.icecast(id="broadcast_output",
@@ -440,9 +442,9 @@ def output_new_show () =
     new_output_source =
         mksafe(id="switchboard_source",
             smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, 
-                    on_offset(offset=0.0, handle_track_end,
-                        switch( track_sensitive=false, [ ({!fadeout_instant == true}, blank()), ({true},
-                            switch( track_sensitive=true, [ ({!fadeout_trackend == true}, blank()), ({true},
+                    on_offset(id="track_end_handler", offset=0.0, handle_track_end,
+                        switch(id="fadeout_instant_handler", track_sensitive=false, [ ({!fadeout_instant == true}, blank()), ({true},
+                            switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({!fadeout_trackend == true}, blank()), ({true},
                                 show_source
                             ) ] )
                         ) ] )

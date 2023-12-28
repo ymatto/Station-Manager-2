@@ -180,7 +180,7 @@ output.icecast(id="broadcast_output",
 # BOOTSTRAP SHUTDOWN-ABLE OUTPUT SOURCE (TO HARBOR INPUT)
 
 #TODO - this is deuplicate code to output_new_show... separate out a func to call that's the same as changing shows
-bootstrap_out = output.icecast(
+bootstrap_out = output.icecast(id="output_to_harbor",
     %wav,
     host = "0.0.0.0",
     port = station_harbor_port,

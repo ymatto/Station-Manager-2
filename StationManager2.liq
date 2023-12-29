@@ -152,12 +152,71 @@ list.iter(get_showschedule, showschedule_list)
 
 # create input harbor for broadcast
 
+# TEMP instrumenting internal_input_harbor  to death to see what's going on
+
+def log_on_connect(headers)
+    log("HARBOR DEBUG: Harbor connected with headers:\n#{headers}")
+end
+
+def log_on_disconnect()
+    log("HARBOR DEBUG: Harbor disconnected.")
+end
+
 settings.harbor.bind_addrs.set(["0.0.0.0"])
+
+# for testing
 harbor_input_for_broadcast = input.harbor(
     id="internal_input_harbor",
     "broadcast-harbor",
     port=station_harbor_port,
-    password=station_harbor_password )
+    password=station_harbor_password, 
+    replay_metadata=true,
+    on_connect=log_on_connect,
+    on_disconnect=log_on_disconnect
+    )
+
+# original
+# harbor_input_for_broadcast = input.harbor(
+#    id="internal_input_harbor",
+#    "broadcast-harbor",
+#    port=station_harbor_port,
+#    password=station_harbor_password, 
+#    replay_metadata=true,
+#    )
+
+def do_on_harbor(cmd)
+    response = ref("")
+    if (cmd=="stop") then
+        harbor_input_for_broadcast.stop()
+        response := "stop sent"
+    elsif (cmd=="shutdown") then
+        harbor_input_for_broadcast.shutdown()
+        response := "shutdown sent"
+    elsif (cmd=="skip") then
+        harbor_input_for_broadcast.skip()
+        response := "skip sent"
+    elsif (cmd=="status") then
+        response :=
+            "status:            #{harbor_input_for_broadcast.status()}\n" ^
+            "connected_client:  #{harbor_input_for_broadcast.connected_client()}\n" ^
+            "is_active:         #{harbor_input_for_broadcast.is_active()}\n" ^
+            "is_ready:          #{harbor_input_for_broadcast.is_ready()}\n" ^
+            "is_up:             #{harbor_input_for_broadcast.is_up()}\n" ^
+            "fallible:          #{harbor_input_for_broadcast.fallible}\n" ^
+            "self_sync:         #{harbor_input_for_broadcast.self_sync()}\n"
+    else
+        response:= "#{cmd} not handled"
+    end
+    !response
+end
+server.register(namespace="test", "harbor", do_on_harbor)
+
+
+
+
+
+
+
 
 # FIXME - !!! For some reason the mksafe here is triggering, going to blank, when everything seems to be fine... middle of tracks even
 # Recreating the input to the harbor seems to resolve it... what's going on?

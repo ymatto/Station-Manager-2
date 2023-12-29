@@ -155,11 +155,12 @@ list.iter(get_showschedule, showschedule_list)
 # TEMP instrumenting internal_input_harbor  to death to see what's going on
 
 def log_on_connect(headers)
-    log("HARBOR DEBUG: Harbor connected with headers:\n#{headers}")
+    log(" ****** HARBOR DEBUG: Harbor connected")
+    log("      Headers:\n#{headers}")
 end
 
 def log_on_disconnect()
-    log("HARBOR DEBUG: Harbor disconnected.")
+    log(" ****** DEBUG: Harbor disconnected.")
 end
 
 settings.harbor.bind_addrs.set(["0.0.0.0"])

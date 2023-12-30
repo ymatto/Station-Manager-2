@@ -615,8 +615,13 @@ def command_loop() =
     end
     # check trackend_command_queue
     if (!track_endtime) then
+        track_endtime := false # reset to start waiting for next trackend
         process_trackend_command_queue()
-        track_endtime := false # reset and start waiting for next trackend
+        # take a quick check of the input harbor to make sure it's not broken when we know we should be playing tracks
+        if (is_input_harbor_ready() == false) then
+            kick_input_harbor()
+            log("OOPS: input harbor broke - stopped to force a reboot")
+        end
     end
     # check timed_command_queue
     next_timed_command_time = snd(list.hd(default=(["", ""], 0.0), !timed_command_queue))

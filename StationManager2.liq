@@ -150,6 +150,12 @@ list.iter(get_showschedule, showschedule_list)
 
 # SET UP BROADCAST USING SWITCHABLE HARBOR
 
+# prioritize native ogg/flac decoders to take advice not to use wav and to avoid issues with ffmpeg with
+# memory leaks on ogg/flac and dying after a few hours of wav (which caused issue leading to "kick" logic)
+# per: https://github.com/savonet/liquidsoap/discussions/3048
+settings.decoder.priorities.flac.set( 11 )
+settings.decoder.priorities.ogg.set( 12 )
+
 # harbor input logging handlers
 
 def log_harbor_on_connect(headers)
@@ -207,7 +213,7 @@ output.icecast(id="broadcast_output",
 
 #TODO - this is deuplicate code to output_new_show... separate out a func to call that's the same as changing shows
 bootstrap_out = output.icecast(id="output_to_harbor",
-    %wav,
+    %ogg(%flac),
     host = "0.0.0.0",
     port = station_harbor_port,
     mount = "broadcast-harbor",
@@ -477,7 +483,7 @@ def output_new_show () =
             )
         )
     out = output.icecast(id="output_to_harbor",
-        %wav,
+        %ogg(%flac),
         host = "0.0.0.0",
         port = station_harbor_port,
         mount = "broadcast-harbor",

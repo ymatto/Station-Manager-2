@@ -173,13 +173,13 @@ harbor_input_for_broadcast = input.harbor(
     on_disconnect=log_harbor_on_disconnect
     )
 
-# for internal checks for problems that require kicking the input harbor
+# for internal checks for problems that require rebooting the input harbor
 def is_input_harbor_ready()
     harbor_input_for_broadcast.is_ready()
 end
 
-# forces input harbor to reboot, seemingly addressing problems with decoder
-def kick_input_harbor()
+# forces input harbor to reboot, seemingly addressing problems with decoder - ie. jiggle the cables to make it work again
+def reboot_input_harbor()
     harbor_input_for_broadcast.stop()
 end
 
@@ -619,7 +619,7 @@ def command_loop() =
         process_trackend_command_queue()
         # take a quick check of the input harbor to make sure it's not broken when we know we should be playing tracks
         if (is_input_harbor_ready() == false) then
-            kick_input_harbor()
+            reboot_input_harbor()
             log("OOPS: input harbor broke - stopped to force a reboot")
         end
     end

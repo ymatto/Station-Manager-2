@@ -150,17 +150,47 @@ list.iter(get_showschedule, showschedule_list)
 
 # SET UP BROADCAST USING SWITCHABLE HARBOR
 
-# create input harbor for broadcast
+# prioritize native ogg/flac decoders to take advice not to use wav and to avoid issues with ffmpeg with
+# memory leaks on ogg/flac and dying after a few hours of wav (which caused issue leading to "kick" logic)
+# per: https://github.com/savonet/liquidsoap/discussions/3048
+settings.decoder.priorities.flac.set( 11 )
+settings.decoder.priorities.ogg.set( 12 )
 
+# harbor input logging handlers
+
+def log_harbor_on_connect(headers)
+    log("Input harbor connected, with headers:\n#{headers}")
+end
+
+def log_harbor_on_disconnect()
+    log("Input harbor disconnected")
+end
+
+# create private input harbor for broadcast, allowing the orignal source stream to be switched or fail without disconnecting listeners
+# NOTE: this may go into an "is_ready = false" state if the decoder barfs. This was happening with ffmpeg and WAV input
 settings.harbor.bind_addrs.set(["0.0.0.0"])
 harbor_input_for_broadcast = input.harbor(
     id="internal_input_harbor",
     "broadcast-harbor",
     port=station_harbor_port,
-    password=station_harbor_password )
+    password=station_harbor_password, 
+    replay_metadata=true,
+    on_connect=log_harbor_on_connect,
+    on_disconnect=log_harbor_on_disconnect
+    )
 
-# FIXME - !!! For some reason the mksafe here is triggering, going to blank, when everything seems to be fine... middle of tracks even
-# Recreating the input to the harbor seems to resolve it... what's going on?
+# for internal checks for problems that require rebooting the input harbor
+def is_input_harbor_ready()
+    harbor_input_for_broadcast.is_ready()
+end
+
+# forces input harbor to reboot, seemingly addressing problems with decoder - ie. jiggle the cables to make it work again
+def reboot_input_harbor()
+    harbor_input_for_broadcast.stop()
+end
+
+# create final broadcast output to public icecast
+
 broadcast_source = mksafe(id="broadcast_source_from_harbor", harbor_input_for_broadcast)
 
 output.icecast(id="broadcast_output",
@@ -183,7 +213,7 @@ output.icecast(id="broadcast_output",
 
 #TODO - this is deuplicate code to output_new_show... separate out a func to call that's the same as changing shows
 bootstrap_out = output.icecast(id="output_to_harbor",
-    %wav,
+    %ogg(%flac),
     host = "0.0.0.0",
     port = station_harbor_port,
     mount = "broadcast-harbor",
@@ -453,7 +483,7 @@ def output_new_show () =
             )
         )
     out = output.icecast(id="output_to_harbor",
-        %wav,
+        %ogg(%flac),
         host = "0.0.0.0",
         port = station_harbor_port,
         mount = "broadcast-harbor",
@@ -591,8 +621,13 @@ def command_loop() =
     end
     # check trackend_command_queue
     if (!track_endtime) then
+        track_endtime := false # reset to start waiting for next trackend
         process_trackend_command_queue()
-        track_endtime := false # reset and start waiting for next trackend
+        # take a quick check of the input harbor to make sure it's not broken when we know we should be playing tracks
+        if (is_input_harbor_ready() == false) then
+            reboot_input_harbor()
+            log("OOPS: input harbor broke - stopped to force a reboot")
+        end
     end
     # check timed_command_queue
     next_timed_command_time = snd(list.hd(default=(["", ""], 0.0), !timed_command_queue))
@@ -609,6 +644,8 @@ thread.run.recurrent(delay=0.1, command_loop)
 
 
 # SERVER FUNCTIONS
+
+# commands for auto DJ
 
 def dj_trackend_enqueue (input_string) =
     trimmed_input = string.trim(input_string)
@@ -673,30 +710,54 @@ def dj_timed_enqueue (input_string) =
 end
 
 server.register(namespace="dj",
-                usage="trackend <command> [<argument>] [<time>]",
-                description="Inserts a command into the DJ queue to be run at an optional delay time (s) from track's end\n" ^
-                            "  Supported commands:\n" ^
-                            "      change_show [show name]\n" ^
-                            "      set_fadeout_trackend [true/false]\n" ^
-                            "      set_fadeout_instant [true/false]\n" ^
-                            "      say [statement]\n" ^
-                            "      set_voice [voice name]\n" ^
-                            "      skip\n",
-                "trackend",
-                dj_trackend_enqueue)
+    usage="trackend <command> [<argument>] [<time>]",
+    description="Inserts a command into the DJ queue to be run at an optional delay time (s) from track's end\n" ^
+                "  Supported commands:\n" ^
+                "      change_show [show name]\n" ^
+                "      set_fadeout_trackend [true/false]\n" ^
+                "      set_fadeout_instant [true/false]\n" ^
+                "      say [statement]\n" ^
+                "      set_voice [voice name]\n" ^
+                "      skip\n",
+    "trackend",
+    dj_trackend_enqueue)
 
 server.register(namespace="dj",
-                usage="now <command> [<argument>] [<time>]",
-                description="Inserts a command into the DJ queue to be run after an optional delay time (s) from now\n" ^
-                            "  Supported commands:\n" ^
-                            "      change_show [show name]\n" ^
-                            "      set_fadeout_trackend [true/false]\n" ^
-                            "      set_fadeout_instant [true/false]\n" ^
-                            "      say [statement]\n" ^
-                            "      set_voice [voice name]\n" ^
-                            "      skip\n",
-                "now",
-                dj_timed_enqueue)
+    usage="now <command> [<argument>] [<time>]",
+    description="Inserts a command into the DJ queue to be run after an optional delay time (s) from now\n" ^
+                "  Supported commands:\n" ^
+                "      change_show [show name]\n" ^
+                "      set_fadeout_trackend [true/false]\n" ^
+                "      set_fadeout_instant [true/false]\n" ^
+                "      say [statement]\n" ^
+                "      set_voice [voice name]\n" ^
+                "      skip\n",
+    "now",
+    dj_timed_enqueue)
+
+
+# commands for input harbor
+
+    def do_harbor_stop(cmd)
+        harbor_input_for_broadcast.stop()
+        "stop sent"
+    end
+    
+    def do_harbor_status(cmd)
+        "connected_client:  #{harbor_input_for_broadcast.connected_client()}\n" ^
+        "is_active:         #{harbor_input_for_broadcast.is_active()}\n" ^
+        "is_up:             #{harbor_input_for_broadcast.is_up()}\n" ^
+        "is_ready:          #{harbor_input_for_broadcast.is_ready()}" # will be false during startup, or if something goes wrong with the harbor decoding
+    end
+    
+    server.register(namespace="harbor",
+        "stop",
+        do_harbor_stop)
+    
+    server.register(namespace="harbor",
+        "status",
+        do_harbor_status)
+
 
 
 

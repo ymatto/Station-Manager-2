@@ -1,11 +1,4 @@
-
-passwords.liq
-icecast.xml
 .DS_Store
 *.txt
-tracklog_test.liq
 *.log
-quick_test_blank.liq
-quick_test.liq
-TEMP.liq
-voicetest.wav
+testfiles_archive/

@@ -88,17 +88,17 @@ def get_show(thisshow) =
     thisshowdata = snd(thisshow)
 
     thisshowpath = thisshowdata.playlist_path # this is required - will fail if missing
-    show_paths := list.append([(thisshowkey, "#{!station_playlists_root}#{thisshowpath}")], !show_paths)
+    show_paths := list.append([(thisshowkey, "#{station_playlists_root()}#{thisshowpath}")], show_paths())
     thisshowlongname = thisshowdata.show_longname ?? "error" # TODO: deal with failure better
-    show_longnames := list.append([(thisshowkey, thisshowlongname)], !show_longnames)
+    show_longnames := list.append([(thisshowkey, thisshowlongname)], show_longnames())
     thisshowDJvoice = thisshowdata.DJ_voice ?? ""
-    show_voices := list.append([(thisshowkey, thisshowDJvoice)], !show_voices)
+    show_voices := list.append([(thisshowkey, thisshowDJvoice)], show_voices())
     thissignon = thisshowdata.signon ?? ""
-    show_signons := list.append([(thisshowkey, thissignon)], !show_signons)
+    show_signons := list.append([(thisshowkey, thissignon)], show_signons())
     thissignoff = thisshowdata.signoff ?? ""
-    show_signoffs := list.append([(thisshowkey, thissignoff)], !show_signoffs)
+    show_signoffs := list.append([(thisshowkey, thissignoff)], show_signoffs())
     thisshuffle_mode = thisshowdata.shuffle_mode ?? "songs" # TODO: make actually do something
-    show_shuffle_modes := list.append([(thisshowkey, thisshuffle_mode)], !show_shuffle_modes)
+    show_shuffle_modes := list.append([(thisshowkey, thisshuffle_mode)], show_shuffle_modes())
 end
 
 list.iter(get_show, show_list)
@@ -129,13 +129,13 @@ let json.parse (showschedule_list : [{
 
 def get_showschedule(thisshowschedule) =
     this_type = thisshowschedule.type ?? "everyday" # TODO: check default handling?
-    showschedule_types := list.append([this_type], !showschedule_types)
+    showschedule_types := list.append([this_type], showschedule_types())
     this_days = thisshowschedule.days ?? [""] # TODO: check default handling?
-    showschedule_days := list.append([this_days], !showschedule_days)
+    showschedule_days := list.append([this_days], showschedule_days())
     this_show_names = thisshowschedule.show_names ?? [""] # TODO: check default handling?
-    showschedule_show_names := list.append([this_show_names], !showschedule_show_names)
+    showschedule_show_names := list.append([this_show_names], showschedule_show_names())
     this_show_hours = thisshowschedule.show_hours ?? [0] # TODO: check default handling?
-    showschedule_show_hours := list.append([this_show_hours], !showschedule_show_hours)
+    showschedule_show_hours := list.append([this_show_hours], showschedule_show_hours())
 end
     
 list.iter(get_showschedule, showschedule_list)
@@ -233,7 +233,7 @@ new_tracklog = ref ("")
 # Write stuff whenever there's new metadata
 
 def addtotracklog(nexttrack) =
-  new_tracklog := string.concat([!new_tracklog, nexttrack, "\n"])
+  new_tracklog := string.concat([new_tracklog(), nexttrack, "\n"])
 end
 
 def logtrack(metadata) =
@@ -242,15 +242,15 @@ def logtrack(metadata) =
     album = metadata["album"]
     title = metadata["title"]
     newline="#{artist} - #{album} - #{title}"
-    recent_tracks := list.add(newline, !recent_tracks)
-    if (list.length(!recent_tracks) > 20) then
-        recent_tracks := list.rev(list.tl(list.rev(!recent_tracks)))
+    recent_tracks := list.add(newline, recent_tracks())
+    if (list.length(recent_tracks()) > 20) then
+        recent_tracks := list.rev(list.tl(list.rev(recent_tracks())))
     end
     new_tracklog := ""
-    list.iter(addtotracklog, !recent_tracks)
+    list.iter(addtotracklog, recent_tracks())
     ignore(
         file.write(
-            data=!new_tracklog,
+            data=new_tracklog(),
             append=false,
             station_tracklog_path
         )
@@ -353,26 +353,26 @@ def timed_enqueue(command, exec_delay) = # command (list), exec_delay (float, se
     command_time = now + exec_delay # needs to be ref to be visible within func below?
     log("Timed DJ command received:         " ^ string_of(command) ^ " with execution set to " ^ string_of(exec_delay) ^ " seconds from now")
     command_pair = [(command, command_time)] # timed queue uses absolute times for execution
-    timed_command_queue := list.append(!timed_command_queue, command_pair)
+    timed_command_queue := list.append(timed_command_queue(), command_pair)
     # now sort it by time (least first) so we can just check the head of the list in the command loop
-    timed_command_queue := list.sort(sort_command_queue_by_time_ascending, !timed_command_queue)
-    # log("timed command queue now: " ^ string_of(!timed_command_queue))
+    timed_command_queue := list.sort(sort_command_queue_by_time_ascending, timed_command_queue())
+    # log("timed command queue now: " ^ string_of(timed_command_queue()))
 end
 
 def trackend_enqueue(command, exec_delay) =
     log("Trackend DJ command received:      " ^ string_of(command) ^ " with execution delay: " ^ string_of(exec_delay) ^ " after end of this track")
     command_pair = [(command, exec_delay)] # trackend queue uses a delay, all of which can be turned into fixed timed_enqueue requests at track end
-    trackend_command_queue := list.append(!trackend_command_queue, command_pair)
-    # log("trackend command queue now: " ^ string_of(!trackend_command_queue))
+    trackend_command_queue := list.append(trackend_command_queue(), command_pair)
+    # log("trackend command queue now: " ^ string_of(trackend_command_queue()))
 end
 
 def pre_trackend_enqueue(command, exec_delay) =
     log("Pre-trackend DJ command received:  " ^ string_of(command) ^ " with execution time: " ^ string_of(exec_delay) ^ " before end of this track")
     command_pair = [(command, exec_delay)]
-    pre_trackend_command_queue := list.append(!pre_trackend_command_queue, command_pair)
+    pre_trackend_command_queue := list.append(pre_trackend_command_queue(), command_pair)
     # now sort it by pre-trackend delay (largest first) so we can just look check the head of the list in the command loop
-    pre_trackend_command_queue := list.sort(sort_command_queue_by_time_descending, !pre_trackend_command_queue)
-    # log("pre-trackend command queue now: " ^ string_of(!pre_trackend_command_queue))
+    pre_trackend_command_queue := list.sort(sort_command_queue_by_time_descending, pre_trackend_command_queue())
+    # log("pre-trackend command queue now: " ^ string_of(pre_trackend_command_queue()))
 end
 
 # command-queueable functions
@@ -401,31 +401,31 @@ def set_voice (voicename) =
     newvoice = ref ("")
     if (voicename == "normal") then
         newvoice := station_default_voice
-        showvoice = list.assoc(default="", !current_show_name, !show_voices)
+        showvoice = list.assoc(default="", current_show_name(), show_voices())
         if (showvoice != "") then
             newvoice := showvoice
         end
     else
         newvoice := voicename
     end
-    current_voice := !newvoice
-    log("   New voice selected: " ^ !newvoice)
+    current_voice := newvoice()
+    log("   New voice selected: " ^ newvoice())
 end
 
 def say (text) =
     speech_filename = file.temp("SM2_speech_", ".wav")
-    if (!current_voice == "") then
+    if (current_voice() == "") then
         log("No voice configured. \"SAY\" command ignored.")
     else
         if (station_voice_type == "mac") then
             # NOTE The 3500ms of silence is to compensate for the fade time on the playover_source
-            command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v \"" ^ !current_voice ^ "\" \"[[ slnc 3500 ]] " ^ text ^ " [[ slnc 1000 ]]\""
+            command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v \"" ^ current_voice() ^ "\" \"[[ slnc 3500 ]] " ^ text ^ " [[ slnc 1000 ]]\""
             process_return = process.run(timeout = 30.0, command_string)
             if (process_return.stderr != "") then
                 log("SAY DJ COMMAND FAILED:")
                 log("#{process_return.stderr}")
             else
-                log("SPEAKING [" ^ !current_voice ^ "]: " ^ text)
+                log("SPEAKING [" ^ current_voice() ^ "]: " ^ text)
                 ignore(server.execute("playover_source.push " ^ speech_filename)) # NOTE Likely will change in later version of LiquidSoap
             end
         else
@@ -435,7 +435,7 @@ def say (text) =
 end
 
 def skip () =
-    source.skip(!current_show_source) 
+    source.skip(current_show_source()) 
     log("Skipping to next track in playlist!")
 end
 
@@ -450,7 +450,7 @@ end
 
 def shutdown_current_output ()
     log("   Shutting down current show....")
-    shut_this_down = !current_output_source_shutdown
+    shut_this_down = current_output_source_shutdown()
     # NOTE - this kicks off some async process that takes some time to complete... was causing issues
     # this is why I use the thread.run with a 0.5s delay below to make sure this finishes
     shut_this_down() 
@@ -459,10 +459,10 @@ end
 requested_showname = ref("")
 
 def output_new_show () =
-    show_name = !requested_showname
+    show_name = requested_showname()
     log("   Outputting new show: " ^ show_name)
 
-    show_path = list.assoc(default="error", show_name, !show_paths)
+    show_path = list.assoc(default="error", show_name, show_paths())
     show_source = playlist(id="scheduled_show_playlist", show_path)
     show_source.on_metadata(logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
     current_show_source := show_source
@@ -473,8 +473,8 @@ def output_new_show () =
         mksafe(id="switchboard_source",
             smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, 
                     on_offset(id="track_end_handler", offset=0.0, handle_track_end,
-                        switch(id="fadeout_instant_handler", track_sensitive=false, [ ({!fadeout_instant == true}, blank()), ({true},
-                            switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({!fadeout_trackend == true}, blank()), ({true},
+                        switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
+                            switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
                                 show_source
                             ) ] )
                         ) ] )
@@ -497,7 +497,7 @@ def output_new_show () =
 end
 
 def change_show (showname) =
-    if (list.assoc(default="error", showname, !show_paths) != "error") then
+    if (list.assoc(default="error", showname, show_paths()) != "error") then
         log("  --- New show starting: " ^ showname ^ " ------------------------------------")
         shutdown_current_output()
 
@@ -507,7 +507,7 @@ def change_show (showname) =
         thread.run(delay=0.5, output_new_show)
 
         current_show_name := showname
-        current_show_longname = list.assoc(default="", showname, !show_longnames)
+        current_show_longname = list.assoc(default="", showname, show_longnames())
         set_voice("normal")
         ignore(
             file.write(
@@ -558,11 +558,11 @@ def process_timed_command_queue() =
             true
         end
     end
-    timed_command_queue := list.filter(process_commands, !timed_command_queue) # updated queue
+    timed_command_queue := list.filter(process_commands, timed_command_queue()) # updated queue
 end
 
 def process_pre_trackend_command_queue() =
-    track_remaining_time = source.remaining(!current_show_source)
+    track_remaining_time = source.remaining(current_show_source())
     def process_commands(this_command_pair) =
         this_command = fst(this_command_pair)
         this_command_time = snd(this_command_pair)
@@ -574,7 +574,7 @@ def process_pre_trackend_command_queue() =
             true
         end
     end
-    pre_trackend_command_queue := list.filter(process_commands, !pre_trackend_command_queue) # updated queue
+    pre_trackend_command_queue := list.filter(process_commands, pre_trackend_command_queue()) # updated queue
 end
 
 def process_trackend_command_queue() =
@@ -598,14 +598,14 @@ def process_trackend_command_queue() =
         false # just return an empty queue to the filter
     end
 
-    remaining_pre_trackend_commands = list.length(!pre_trackend_command_queue)
+    remaining_pre_trackend_commands = list.length(pre_trackend_command_queue())
     if (remaining_pre_trackend_commands > 0) then
         log(string_of(remaining_pre_trackend_commands) ^ " pre-trackend DJ commands present in queue at track's end. Running these first.")
-        pre_trackend_command_queue := list.filter(process_pretrackend_commands, !pre_trackend_command_queue) # will just be cleared out
+        pre_trackend_command_queue := list.filter(process_pretrackend_commands, pre_trackend_command_queue()) # will just be cleared out
     end
 
-    if (list.length(!trackend_command_queue) > 0) then
-        trackend_command_queue := list.filter(process_trackend_commands, !trackend_command_queue) # will just be cleared out
+    if (list.length(trackend_command_queue()) > 0) then
+        trackend_command_queue := list.filter(process_trackend_commands, trackend_command_queue()) # will just be cleared out
     end
 end
 
@@ -614,13 +614,13 @@ end
 def command_loop() =
     now = time()
     # check pre_trackend_command_queue
-    track_remaining_time = source.remaining(!current_show_source)
-    next_pre_trackend_time = snd(list.hd(default=(["", ""], -1.0), !pre_trackend_command_queue))
+    track_remaining_time = source.remaining(current_show_source())
+    next_pre_trackend_time = snd(list.hd(default=(["", ""], -1.0), pre_trackend_command_queue()))
     if (track_remaining_time <= next_pre_trackend_time) then
         process_pre_trackend_command_queue()
     end
     # check trackend_command_queue
-    if (!track_endtime) then
+    if (track_endtime()) then
         track_endtime := false # reset to start waiting for next trackend
         process_trackend_command_queue()
         # take a quick check of the input harbor to make sure it's not broken when we know we should be playing tracks
@@ -630,7 +630,7 @@ def command_loop() =
         end
     end
     # check timed_command_queue
-    next_timed_command_time = snd(list.hd(default=(["", ""], 0.0), !timed_command_queue))
+    next_timed_command_time = snd(list.hd(default=(["", ""], 0.0), timed_command_queue()))
     if (now >= next_timed_command_time and next_timed_command_time != 0.0) then
         process_timed_command_queue()
     end
@@ -659,7 +659,7 @@ def dj_trackend_enqueue (input_string) =
         command_name := list.nth(default="", input_list, 0)
         last_input = list.nth(default="", input_list, input_list_length-1)
         last_input_as_float = float_of_string(default=0.8686, last_input) # hack to just check if there's a float there or not while allowing positive or negative input
-        command_name_length = string.length(!command_name)
+        command_name_length = string.length(command_name())
         if (last_input_as_float != 0.8686) then # float found, so user provided a delay to be used rather than default
             command_time := last_input_as_float
             command_time_length = string.length(last_input)
@@ -669,10 +669,10 @@ def dj_trackend_enqueue (input_string) =
             # command_arg is everything after command (at start)
             command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
         end
-        if (!command_time >= 0.0) then
-            trackend_enqueue([!command_name, !command_arg], !command_time)
+        if (command_time() >= 0.0) then
+            trackend_enqueue([command_name(), command_arg()], command_time())
         else
-            pre_trackend_enqueue([!command_name, !command_arg], 0.0-!command_time)
+            pre_trackend_enqueue([command_name(), command_arg()], 0.0-command_time())
         end
         "Done"
     else
@@ -692,7 +692,7 @@ def dj_timed_enqueue (input_string) =
         command_name := list.nth(default="", input_list, 0)
         last_input = list.nth(default="", input_list, input_list_length-1)
         last_input_as_float = float_of_string(default=-1.0, last_input)
-        command_name_length = string.length(!command_name)
+        command_name_length = string.length(command_name())
         if (last_input_as_float >= 0.0) then
             command_time := last_input_as_float
             command_time_length = string.length(last_input)
@@ -702,7 +702,7 @@ def dj_timed_enqueue (input_string) =
             # command_arg is everything after command (at start)
             command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
         end
-        timed_enqueue([!command_name, !command_arg], !command_time)
+        timed_enqueue([command_name(), command_arg()], command_time())
         "Done"
     else
         "No DJ command provided"
@@ -784,7 +784,7 @@ def update_current_next_shows () =
     def find_todays_dow_types (listpair) =
         this_index = fst(listpair)
         this_type = snd(listpair)
-        deez_schedule_days = list.nth(default=[""], !showschedule_days, this_index)
+        deez_schedule_days = list.nth(default=[""], showschedule_days(), this_index)
         today = get_today()
         if (this_type == "daysofweek" and list.mem(today, deez_schedule_days)) then
             true
@@ -796,7 +796,7 @@ def update_current_next_shows () =
     def find_tomorrows_dow_types (listpair) =
         this_index = fst(listpair)
         this_type = snd(listpair)
-        deez_schedule_days = list.nth(default=[""], !showschedule_days, this_index)
+        deez_schedule_days = list.nth(default=[""], showschedule_days(), this_index)
         tomorrow = get_tomorrow() # <-- note
         if (this_type == "daysofweek" and list.mem(tomorrow, deez_schedule_days)) then
             true
@@ -826,33 +826,33 @@ def update_current_next_shows () =
 
     today_start_time = get_today_start_time()
     tomorrow_start_time = today_start_time + 86400.0
-    indexed_schedule_types = list.mapi(add_indices, !showschedule_types)
+    indexed_schedule_types = list.mapi(add_indices, showschedule_types())
 
     # TODO: search for "daysofyear" types first
     todays_indexed_dow_schedules = list.filter(find_todays_dow_types, indexed_schedule_types)
     # is there a top-heirarchy schedule type for today?
     if (list.length(todays_indexed_dow_schedules) > 0) then
         todays_schedule_index := fst(list.hd(default=(0, ""), todays_indexed_dow_schedules))
-        todays_show_names := list.nth(default=[""], !showschedule_show_names, !todays_schedule_index)
-        todays_show_hours := list.nth(default=[0], !showschedule_show_hours, !todays_schedule_index)
+        todays_show_names := list.nth(default=[""], showschedule_show_names(), todays_schedule_index())
+        todays_show_hours := list.nth(default=[0], showschedule_show_hours(), todays_schedule_index())
     else
         # TODO: go look for "everyday" schedules and remove this placeholder crap
         todays_schedule_index := 0
         todays_show_names := [""]
         todays_show_hours := [0]
     end
-    indexed_todays_show_hours = list.mapi(add_indices, !todays_show_hours)
+    indexed_todays_show_hours = list.mapi(add_indices, todays_show_hours())
     prior_indexed_todays_show_hours = list.filter(is_prior_hour, indexed_todays_show_hours) # here is where we actually check the time
     todays_current_index = fst(list.hd(default=(0, 0), list.rev(prior_indexed_todays_show_hours)))
-    current_scheduled_show_name := list.nth(default="", !todays_show_names, todays_current_index)
-    current_scheduled_show_hour := list.nth(default=0, !todays_show_hours, todays_current_index)
-    current_scheduled_show_time := today_start_time + float_of_int(!current_scheduled_show_hour) * 3600.0
+    current_scheduled_show_name := list.nth(default="", todays_show_names(), todays_current_index)
+    current_scheduled_show_hour := list.nth(default=0, todays_show_hours(), todays_current_index)
+    current_scheduled_show_time := today_start_time + float_of_int(current_scheduled_show_hour()) * 3600.0
     # now let's see if we can just grab the next show from today's schedule...
-    if (list.length(!todays_show_names) > todays_current_index + 1) then
+    if (list.length(todays_show_names()) > todays_current_index + 1) then
         # yup, grab it!
-        next_scheduled_show_name := list.nth(default="", !todays_show_names, todays_current_index + 1)
-        next_scheduled_show_hour := list.nth(default=0, !todays_show_hours, todays_current_index + 1)
-        next_scheduled_show_time := today_start_time + float_of_int(!next_scheduled_show_hour) * 3600.0
+        next_scheduled_show_name := list.nth(default="", todays_show_names(), todays_current_index + 1)
+        next_scheduled_show_hour := list.nth(default=0, todays_show_hours(), todays_current_index + 1)
+        next_scheduled_show_time := today_start_time + float_of_int(next_scheduled_show_hour()) * 3600.0
     else
         # okay, gotta use tomorrow's schedule...
         log("    Getting first show of tomorrow's schedule...")
@@ -861,20 +861,20 @@ def update_current_next_shows () =
         # is there a top heirarchy schedule type for tomorrow?
         if (list.length(tomorrows_indexed_dow_schedules) > 0) then
             tomorrows_schedule_index := fst(list.hd(default=(0, ""), tomorrows_indexed_dow_schedules))
-            tomorrows_show_names := list.nth(default=[""], !showschedule_show_names, !tomorrows_schedule_index)
-            tomorrows_show_hours := list.nth(default=[0], !showschedule_show_hours, !tomorrows_schedule_index)
+            tomorrows_show_names := list.nth(default=[""], showschedule_show_names(), tomorrows_schedule_index())
+            tomorrows_show_hours := list.nth(default=[0], showschedule_show_hours(), tomorrows_schedule_index())
         else
             # TODO: go look for "everyday" schedules and remove this placeholder crap
             tomorrows_schedule_index := 0
             tomorrows_show_names := [""]
             tomorrows_show_hours := [0]
         end
-        next_scheduled_show_name := list.hd(default="", !tomorrows_show_names)
-        next_scheduled_show_hour := list.hd(default=0, !tomorrows_show_hours)
-        next_scheduled_show_time := tomorrow_start_time + float_of_int(!next_scheduled_show_hour) * 3600.0
+        next_scheduled_show_name := list.hd(default="", tomorrows_show_names())
+        next_scheduled_show_hour := list.hd(default=0, tomorrows_show_hours())
+        next_scheduled_show_time := tomorrow_start_time + float_of_int(next_scheduled_show_hour()) * 3600.0
     end
-    log("    Current show:  " ^ !current_scheduled_show_name)
-    log("    Next show:     " ^ !next_scheduled_show_name)
+    log("    Current show:  " ^ current_scheduled_show_name())
+    log("    Next show:     " ^ next_scheduled_show_name())
 end
 
 
@@ -889,20 +889,20 @@ def auto_dj_loop() =
     now = time()
     this_hour = get_current_hour()
 #    time_since_last_hour = get_time_since_last_hour()
-    track_remaining_time = source.remaining(!current_show_source)
+    track_remaining_time = source.remaining(current_show_source())
     today_start_time = get_today_start_time()
     track_end_time = now + track_remaining_time
 
     # startup condition, or just recovery from a problem
-    if (!current_show_name == "") then
+    if (current_show_name() == "") then
         update_current_next_shows() # figure out what's supposed to be going on
-        log(" *** AUTO-DJ: Starting up with... " ^ !current_scheduled_show_name)
-        timed_enqueue(["change_show", !current_scheduled_show_name], 0.0)
+        log(" *** AUTO-DJ: Starting up with... " ^ current_scheduled_show_name())
+        timed_enqueue(["change_show", current_scheduled_show_name()], 0.0)
         last_handled_hour_time := today_start_time + (float_of_int(this_hour) * 3600.0)
     end
-    up_next_hour_time = !last_handled_hour_time + 3600.0
+    up_next_hour_time = last_handled_hour_time() + 3600.0
 
-    if (now >= !next_scheduled_show_time) then # always keep the latest schedule info correct, regardless of other logic
+    if (now >= next_scheduled_show_time()) then # always keep the latest schedule info correct, regardless of other logic
         update_current_next_shows()
     end
 
@@ -911,15 +911,15 @@ def auto_dj_loop() =
         log(" *** AUTO-DJ: Time to handle the hour.")
         if (track_end_time < up_next_hour_time + (10.0 * 60.0)) then # do stuff at the trackend
             # NOTE ideally this should be an == without the 100.0s slop, but I don't trust my float times
-            if (!next_scheduled_show_time < up_next_hour_time + 100.0 and !next_scheduled_show_name != !current_scheduled_show_name) then
-                log (" *** AUTO-DJ: Coming up next... " ^ !next_scheduled_show_name)
+            if (next_scheduled_show_time() < up_next_hour_time + 100.0 and next_scheduled_show_name() != current_scheduled_show_name()) then
+                log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
                 timed_enqueue(["set_fadeout_trackend", "true"], 0.0)
-                trackend_enqueue(["change_show", !next_scheduled_show_name], 3.0)
-                current_signoff = list.assoc(default="", !current_scheduled_show_name, !show_signoffs)
+                trackend_enqueue(["change_show", next_scheduled_show_name()], 3.0)
+                current_signoff = list.assoc(default="", current_scheduled_show_name(), show_signoffs())
                 if (current_signoff != "") then
                     pre_trackend_enqueue(["say", current_signoff], 40.0)
                 end
-                next_signon = list.assoc(default=station_spoken_ID, !next_scheduled_show_name, !show_signons)
+                next_signon = list.assoc(default=station_spoken_ID, next_scheduled_show_name(), show_signons())
                 if (next_signon != "") then
                     trackend_enqueue(["say", next_signon], 13.0)
                 end
@@ -931,17 +931,17 @@ def auto_dj_loop() =
             end
         else # it's time to go but the current track ends 10 minutes after the hour, so just do it without waiting for track end.
             # NOTE same as above
-            if (!next_scheduled_show_time < up_next_hour_time + 100.0 and !next_scheduled_show_name != !current_scheduled_show_name) then
-                log (" *** AUTO-DJ: Coming up next... " ^ !next_scheduled_show_name)
+            if (next_scheduled_show_time() < up_next_hour_time + 100.0 and next_scheduled_show_name() != current_scheduled_show_name()) then
+                log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
                 log (" *** AUTO-DJ: Current track ends more than 10 minutes after the hour. ")
                 timed_enqueue(["set_fadeout_instant", "true"], 40.0)
-                timed_enqueue(["change_show", !next_scheduled_show_name], 43.0)
+                timed_enqueue(["change_show", next_scheduled_show_name()], 43.0)
                 timed_enqueue(["set_fadeout_instant", "false"], 43.1)
-                current_signoff = list.assoc(default="", !current_scheduled_show_name, !show_signoffs)
+                current_signoff = list.assoc(default="", current_scheduled_show_name(), show_signoffs())
                 if (current_signoff != "") then
                     timed_enqueue(["say", current_signoff], 0.0)
                 end
-                next_signon = list.assoc(default=station_spoken_ID, !next_scheduled_show_name, !show_signons)
+                next_signon = list.assoc(default=station_spoken_ID, next_scheduled_show_name(), show_signons())
                 if (next_signon != "") then
                     timed_enqueue(["say", next_signon], 63.0)
                 end
@@ -955,7 +955,7 @@ def auto_dj_loop() =
         last_handled_hour_time := up_next_hour_time # one way or the other, this hour is handled and this section won't run again
     end
 
-    !next_pulse
+    next_pulse()
 end
 
 

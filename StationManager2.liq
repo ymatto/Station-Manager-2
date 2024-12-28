@@ -234,7 +234,7 @@ bootstrap_out = output.icecast(
     password = station_harbor_password,
     blank() )
 
-current_output_source = ref(bootstrap_out)
+# current_output_source = ref(bootstrap_out)
 current_output_source_shutdown = ref(bootstrap_out.shutdown)
 
 
@@ -456,7 +456,7 @@ end
 
 # show management functions (plus change_show queueable command)
 
-def handle_track_end (offset, metadata) = # TODO figure out how to ignore these required handler parameters
+def handle_track_end (metadata) = # TODO figure out how to ignore these required handler parameters
     # TODO before totally ignoring the metadata data here... it seems to include album art? Use with webpage? If the "logtrack" stuff can't?
     log("  - track change signal -")
     track_endtime := true # triggers the command_loop
@@ -483,19 +483,36 @@ def output_new_show () =
 
     # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
     # TODO make the smooth_add stuff (and offset below) a config parameter? per show ideally?
+
+# REPLACED THIS WITH WHAT SHOULD BE BETTER TRACK END DETECTION USING v2.3... DELETE AFTER CONFIRMED WORKING
+#     new_output_source =
+#        mksafe(id="switchboard_source",
+#            smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, 
+#                    on_offset(id="track_end_handler", offset=0.0, handle_track_end,
+#                        switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
+#                            switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
+#                                show_source
+#                            ) ] )
+#                        ) ] )
+#                    )
+#                )
+#            )
+#        )
     new_output_source =
         mksafe(id="switchboard_source",
-            smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, 
-                    on_offset(id="track_end_handler", offset=0.0, handle_track_end,
+            source.on_track(
+                smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, 
                         switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
                             switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
                                 show_source
                             ) ] )
                         ) ] )
                     )
-                )
+                ),
+                handle_track_end
             )
         )
+
     out = output.icecast(
         id="output_to_harbor",
         %ogg(%flac),
@@ -504,7 +521,7 @@ def output_new_show () =
         mount = "broadcast-harbor",
         password = station_harbor_password,
         new_output_source )
-    current_output_source := out
+    # current_output_source := out # CHECK I don't think this is actually used.
     current_output_source_shutdown := out.shutdown
 
     requested_showname := ""

@@ -7,6 +7,8 @@
 
 # LOAD STATIONCONFIG
 
+log("STARTUP: loading stationconfig...")
+
 stationconfig_file = file.contents(argv(default="", 1)) # TODO: allow script to proceed with defaults without argv?
 
 let json.parse stationconfig = stationconfig_file
@@ -38,7 +40,7 @@ station_telnet_server = stationconfig.telnet_server ?? false
 station_telnet_server_port = stationconfig.telnet_server_port ?? 1234
 station_telnet_server_timeout = float_of_int(stationconfig.telnet_server_timeout ?? 60)
 station_telnet_server_netmask = stationconfig.telnet_server_netmask ?? "0.0.0.0"
-station_harbor_port = stationconfig.harbor_port ?? station_port+10
+station_harbor_port = stationconfig.harbor_port ?? (station_port + 10)
 station_harbor_password = stationconfig.harbor_password ?? station_icecast_password^string_of(random.int())
 
 # Logs setup
@@ -56,6 +58,8 @@ end
 
 
 # LOAD SHOWCONFIG
+
+log("STARTUP: loading showconfig...")
 
 # TODO: For now just pulling a list of names for the sake of the currentShow.log, need to parse the rest
 # TODO: Deal with failure-to-read better with thoughtful defaults and handling
@@ -107,6 +111,8 @@ list.iter(get_show, show_list)
 
 # LOAD SHOW SCHEDULE
 
+log("STARTUP: loading show schedule...")
+
 # TODO: If no file configured, should be smart enough to just pull list of directories
 #       from station_playlists_root (if specified) and set reasonable defaults
 # TODO: Deal with failure-to-read better with thoughtful defaults and handling
@@ -149,6 +155,8 @@ list.iter(get_showschedule, showschedule_list)
 
 
 # SET UP BROADCAST USING SWITCHABLE HARBOR
+
+log("STARTUP: setting up switchable harbor...")
 
 # prioritize native ogg/flac decoders to take advice not to use wav and to avoid issues with ffmpeg with
 # memory leaks on ogg/flac and dying after a few hours of wav (which caused issue leading to "kick" logic)
@@ -193,14 +201,17 @@ end
 
 broadcast_source = mksafe(id="broadcast_source_from_harbor", harbor_input_for_broadcast)
 
-output.icecast(id="broadcast_output",
+output.icecast(
+    id="broadcast_output",
     station_output_encoding,
     host = station_host, port = station_port,
-    password = station_icecast_password, mount = station_mount,
+    password = station_icecast_password,
+    mount = station_mount,
     name = station_name,
     description = station_description,
     genre = station_genre,
-    url = station_url, broadcast_source)
+    url = station_url,
+    broadcast_source)
     
     
     
@@ -211,8 +222,11 @@ output.icecast(id="broadcast_output",
 
 # BOOTSTRAP SHUTDOWN-ABLE OUTPUT SOURCE (TO HARBOR INPUT)
 
-#TODO - this is deuplicate code to output_new_show... separate out a func to call that's the same as changing shows
-bootstrap_out = output.icecast(id="output_to_harbor",
+log("STARTUP: setting up bootstrap output to harbor with blank source...")
+
+#TODO - this is duplicate code to output_new_show... separate out a func to call that's the same as changing shows
+bootstrap_out = output.icecast(
+    id="output_to_harbor",
     %ogg(%flac),
     host = "0.0.0.0",
     port = station_harbor_port,
@@ -482,7 +496,8 @@ def output_new_show () =
                 )
             )
         )
-    out = output.icecast(id="output_to_harbor",
+    out = output.icecast(
+        id="output_to_harbor",
         %ogg(%flac),
         host = "0.0.0.0",
         port = station_harbor_port,
@@ -962,7 +977,7 @@ end
 # kick off automatic show management
 # TODO: make initiating and halting the DJ control loop control board functions
 
-log(" *** Initiating AUTO-DJ...")
+log("STARTUP: initiating AUTO-DJ...")
 thread.run.recurrent(delay=0.0, auto_dj_loop) # start it up!! # TODO make starting it up optional
 
 

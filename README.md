@@ -1,3 +1,6 @@
+Create network "sm2"
+    docker network create sm2
+
 Icecast (set up container once to listen for input):
     docker run -d -p 8000:8000 -v ./icecast.xml:/etc/icecast.xml --network sm2 --network-alias icecast libretime/icecast:2.4.4-debian
 

@@ -40,6 +40,7 @@ station_telnet_server = stationconfig.telnet_server ?? false
 station_telnet_server_port = stationconfig.telnet_server_port ?? 1234
 station_telnet_server_timeout = float_of_int(stationconfig.telnet_server_timeout ?? 60)
 station_telnet_server_netmask = stationconfig.telnet_server_netmask ?? "0.0.0.0"
+# TODO these config options are kind of pointless really... just generate them automatically? Could a port collision be a problem?
 station_harbor_port = stationconfig.harbor_port ?? (station_port + 10)
 station_harbor_password = stationconfig.harbor_password ?? station_icecast_password^string_of(random.int())
 
@@ -167,11 +168,11 @@ settings.decoder.priorities.ogg.set( 12 )
 # harbor input logging handlers
 
 def log_harbor_on_connect(headers)
-    log("Input harbor connected, with headers:\n#{headers}")
+    log("   >>> Input harbor CONNECTED, with headers:\n#{headers}")
 end
 
 def log_harbor_on_disconnect()
-    log("Input harbor disconnected")
+    log("   >>> Input harbor DISCONNECTED")
 end
 
 # create private input harbor for broadcast, allowing the orignal source stream to be switched or fail without disconnecting listeners
@@ -225,6 +226,7 @@ output.icecast(
 log("STARTUP: setting up bootstrap output to harbor with blank source...")
 
 #TODO - this is duplicate code to output_new_show... separate out a func to call that's the same as changing shows
+
 bootstrap_out = output.icecast(
     id="output_to_harbor",
     %ogg(%flac),
@@ -500,7 +502,7 @@ def output_new_show () =
 #        )
     new_output_source =
         mksafe(id="switchboard_source",
-            source.on_track(
+            source.on_track(id="track_end_handler",
                 smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, 
                         switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
                             switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
@@ -995,7 +997,9 @@ end
 # TODO: make initiating and halting the DJ control loop control board functions
 
 log("STARTUP: initiating AUTO-DJ...")
-thread.run.recurrent(delay=0.0, auto_dj_loop) # start it up!! # TODO make starting it up optional
+
+# NOTE the 30s delay is just there to let everything "settle" before starting up the loop. But may not be necessary in the end.
+thread.run.recurrent(delay=30.0, auto_dj_loop) # start it up!! # TODO make starting it up optional
 
 
 

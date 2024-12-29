@@ -40,9 +40,6 @@ station_telnet_server = stationconfig.telnet_server ?? false
 station_telnet_server_port = stationconfig.telnet_server_port ?? 1234
 station_telnet_server_timeout = float_of_int(stationconfig.telnet_server_timeout ?? 60)
 station_telnet_server_netmask = stationconfig.telnet_server_netmask ?? "0.0.0.0"
-# TODO these config options are kind of pointless really... just generate them automatically? Could a port collision be a problem?
-station_harbor_port = stationconfig.harbor_port ?? (station_port + 10)
-station_harbor_password = stationconfig.harbor_password ?? station_icecast_password^string_of(random.int())
 
 # Logs setup
 settings.log.file.path.set(station_log_path)
@@ -155,53 +152,21 @@ list.iter(get_showschedule, showschedule_list)
 # --- BROADCAST --------------------------------------------------------------------
 
 
-# SET UP BROADCAST USING SWITCHABLE HARBOR
+# SET UP BROADCAST WITH DYNAMIC SOURCE
 
-log("STARTUP: setting up switchable harbor...")
+log("STARTUP: setting up dynamic broadcast...")
 
-# prioritize native ogg/flac decoders to take advice not to use wav and to avoid issues with ffmpeg with
-# memory leaks on ogg/flac and dying after a few hours of wav (which caused issue leading to "kick" logic)
-# per: https://github.com/savonet/liquidsoap/discussions/3048
-settings.decoder.priorities.flac.set( 11 )
-settings.decoder.priorities.ogg.set( 12 )
+# Changing current_output_source will change what is broadcast, using the dynamic broadcast_source
+current_output_source = ref(blank())
 
-# harbor input logging handlers
-
-def log_harbor_on_connect(headers)
-    log("   >>> Input harbor CONNECTED, with headers:\n#{headers}")
+# Handler to get the current dynamic source
+def get_source_for_broadcast() =
+    current_output_source()
 end
 
-def log_harbor_on_disconnect()
-    log("   >>> Input harbor DISCONNECTED")
-end
+broadcast_source = source.dynamic(id="boradcast_source", get_source_for_broadcast)
 
-# create private input harbor for broadcast, allowing the orignal source stream to be switched or fail without disconnecting listeners
-# NOTE: this may go into an "is_ready = false" state if the decoder barfs. This was happening with ffmpeg and WAV input
-settings.harbor.bind_addrs.set(["0.0.0.0"])
-harbor_input_for_broadcast = input.harbor(
-    id="internal_input_harbor",
-    "broadcast-harbor",
-    port=station_harbor_port,
-    password=station_harbor_password, 
-    replay_metadata=true,
-    on_connect=log_harbor_on_connect,
-    on_disconnect=log_harbor_on_disconnect
-    )
-
-# for internal checks for problems that require rebooting the input harbor
-def is_input_harbor_ready()
-    harbor_input_for_broadcast.is_ready()
-end
-
-# forces input harbor to reboot, seemingly addressing problems with decoder - ie. jiggle the cables to make it work again
-def reboot_input_harbor()
-    harbor_input_for_broadcast.stop()
-end
-
-# create final broadcast output to public icecast
-
-broadcast_source = mksafe(id="broadcast_source_from_harbor", harbor_input_for_broadcast)
-
+# Create final broadcast output to public icecast
 output.icecast(
     id="broadcast_output",
     station_output_encoding,
@@ -212,33 +177,12 @@ output.icecast(
     description = station_description,
     genre = station_genre,
     url = station_url,
-    broadcast_source)
+    mksafe(broadcast_source))
     
-    
-    
+
     
 
 # --- SHOW CONTROL --------------------------------------------------------------------
-
-
-# BOOTSTRAP SHUTDOWN-ABLE OUTPUT SOURCE (TO HARBOR INPUT)
-
-log("STARTUP: setting up bootstrap output to harbor with blank source...")
-
-#TODO - this is duplicate code to output_new_show... separate out a func to call that's the same as changing shows
-
-bootstrap_out = output.icecast(
-    id="output_to_harbor",
-    %ogg(%flac),
-    host = "0.0.0.0",
-    port = station_harbor_port,
-    mount = "broadcast-harbor",
-    password = station_harbor_password,
-    blank() )
-
-# current_output_source = ref(bootstrap_out)
-current_output_source_shutdown = ref(bootstrap_out.shutdown)
-
 
 
 # FUNCTIONS TO UPDATE LOG DATA ON NEW METADATA ON BROADCAST
@@ -464,84 +408,50 @@ def handle_track_end (metadata) = # TODO figure out how to ignore these required
     track_endtime := true # triggers the command_loop
 end
 
-def shutdown_current_output ()
-    log("   Shutting down current show....")
-    shut_this_down = current_output_source_shutdown()
-    # NOTE - this kicks off some async process that takes some time to complete... was causing issues
-    # this is why I use the thread.run with a 0.5s delay below to make sure this finishes
-    shut_this_down() 
-end
 
-requested_showname = ref("")
+def change_show (show_name) =
+    if (list.assoc(default="error", show_name, show_paths()) != "error") then
+        log("  --- New show starting: " ^ show_name ^ " ------------------------------------")
+    
+        show_path = list.assoc(default="error", show_name, show_paths())
+        show_source = playlist(id="scheduled_show_playlist", show_path)
+        show_source.on_metadata(logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
+        current_show_source := show_source
+    
+        # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
+        # TODO make the smooth_add stuff (and offset below) a config parameter? per show ideally?
+    
+    # THIS IS WHAT WAS BEING USED BEFORE THE BIG DOCKER / v2.3 UPDATE
+    #     new_output_source =
+    #        mksafe(id="switchboard_source",
+    #            smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, 
+    #                    on_offset(id="track_end_handler", offset=0.0, handle_track_end,
+    #                        switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
+    #                            switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
+    #                                show_source
+    #                            ) ] )
+    #                        ) ] )
+    #                    )
+    #                )
+    #            )
+    #        )
 
-def output_new_show () =
-    show_name = requested_showname()
-    log("   Outputting new show: " ^ show_name)
-
-    show_path = list.assoc(default="error", show_name, show_paths())
-    show_source = playlist(id="scheduled_show_playlist", show_path)
-    show_source.on_metadata(logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
-    current_show_source := show_source
-
-    # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
-    # TODO make the smooth_add stuff (and offset below) a config parameter? per show ideally?
-
-# REPLACED THIS WITH WHAT SHOULD BE BETTER TRACK END DETECTION USING v2.3... DELETE AFTER CONFIRMED WORKING
-#     new_output_source =
-#        mksafe(id="switchboard_source",
-#            smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, 
-#                    on_offset(id="track_end_handler", offset=0.0, handle_track_end,
-#                        switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
-#                            switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
-#                                show_source
-#                            ) ] )
-#                        ) ] )
-#                    )
-#                )
-#            )
-#        )
-    new_output_source =
-        mksafe(id="switchboard_source",
-            source.on_track(id="track_end_handler",
-                smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, 
-                        switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
-                            switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
-                                show_source
-                            ) ] )
+    # TODO: reintroduce use of the playover_source for voices somehow...    
+        new_output_source =
+                source.on_track(id="track_end_handler",
+                    switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
+                        switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
+                            show_source
                         ) ] )
-                    )
-                ),
-                handle_track_end
-            )
-        )
+                    ) ] )
+                , handle_track_end)
 
-    out = output.icecast(
-        id="output_to_harbor",
-        %ogg(%flac),
-        host = "0.0.0.0",
-        port = station_harbor_port,
-        mount = "broadcast-harbor",
-        password = station_harbor_password,
-        new_output_source )
-    # current_output_source := out # CHECK I don't think this is actually used.
-    current_output_source_shutdown := out.shutdown
+        # Set the source used by the dynamic broadcast source
+        current_output_source := new_output_source
+    
 
-    requested_showname := ""
-
-end
-
-def change_show (showname) =
-    if (list.assoc(default="error", showname, show_paths()) != "error") then
-        log("  --- New show starting: " ^ showname ^ " ------------------------------------")
-        shutdown_current_output()
-
-        # HACK starting the new output with a delay to hopefully give enough time for the shutdown thread to reliably finish
-        # TODO With LS 2.2, can probably move to just using a thread.pause rather than kick off this other thread...
-        requested_showname := showname
-        thread.run(delay=0.5, output_new_show)
-
-        current_show_name := showname
-        current_show_longname = list.assoc(default="", showname, show_longnames())
+        current_show_name := show_name
+        current_show_longname = list.assoc(default="", show_name, show_longnames())
         set_voice("normal")
         ignore(
             file.write(
@@ -551,7 +461,7 @@ def change_show (showname) =
                 )
         )
     else
-        log("No playlist path specified for requested show: " ^ showname)
+        log("No playlist path specified for requested show: " ^ show_name)
     end
     set_fadeout_trackend("false") # TODO Does this always running cause any problems?
 end
@@ -657,11 +567,6 @@ def command_loop() =
     if (track_endtime()) then
         track_endtime := false # reset to start waiting for next trackend
         process_trackend_command_queue()
-        # take a quick check of the input harbor to make sure it's not broken when we know we should be playing tracks
-        if (is_input_harbor_ready() == false) then
-            reboot_input_harbor()
-            log("OOPS: input harbor broke - stopped to force a reboot")
-        end
     end
     # check timed_command_queue
     next_timed_command_time = snd(list.hd(default=(["", ""], 0.0), timed_command_queue()))
@@ -770,37 +675,13 @@ server.register(namespace="dj",
     dj_timed_enqueue)
 
 
-# commands for input harbor
-
-    def do_harbor_stop(cmd)
-        harbor_input_for_broadcast.stop()
-        "stop sent"
-    end
-    
-    def do_harbor_status(cmd)
-        "connected_client:  #{harbor_input_for_broadcast.connected_client()}\n" ^
-        "is_active:         #{harbor_input_for_broadcast.is_active()}\n" ^
-        "is_up:             #{harbor_input_for_broadcast.is_up()}\n" ^
-        "is_ready:          #{harbor_input_for_broadcast.is_ready()}" # will be false during startup, or if something goes wrong with the harbor decoding
-    end
-    
-    server.register(namespace="harbor",
-        "stop",
-        do_harbor_stop)
-    
-    server.register(namespace="harbor",
-        "status",
-        do_harbor_status)
-
-
-
 
 
                 
 # --- AUTO DJ --------------------------------------------------------------------
 # TODO probably should move relevant json importing stuff down here
 
-# SET UP AUTOMATED HARBOR SOURCE CONTROL VIA SCHEDULE – AKA AUTO-DJ
+# SET UP AUTOMATED DYNAMIC SOURCE CONTROL VIA SCHEDULE – AKA AUTO-DJ
 
 current_scheduled_show_name = ref ("")
 current_scheduled_show_hour = ref (0)
@@ -998,8 +879,7 @@ end
 
 log("STARTUP: initiating AUTO-DJ...")
 
-# NOTE the 30s delay is just there to let everything "settle" before starting up the loop. But may not be necessary in the end.
-thread.run.recurrent(delay=30.0, auto_dj_loop) # start it up!! # TODO make starting it up optional
+thread.run.recurrent(delay=5.0, auto_dj_loop) # start it up!! # TODO make starting it up optional
 
 
 

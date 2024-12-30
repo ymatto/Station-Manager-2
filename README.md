@@ -7,3 +7,4 @@ Icecast (set up container once to listen for input):
 Liquid Soap with test config (run at CLI as needed for testing, verbose mode in Liquid Soap):
     docker run --rm -p 1447:1447 -w /test -v "$(pwd):/test" --network sm2 -e "TZ=Etc/UTC" savonet/liquidsoap:v2.3.0 -v StationManager2.liq -- stationconfig.json
 
+... or just use the docker-compose.yml file

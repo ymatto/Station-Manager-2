@@ -164,7 +164,19 @@ def get_source_for_broadcast() =
     current_output_source()
 end
 
-broadcast_source = source.dynamic(id="boradcast_source", get_source_for_broadcast)
+broadcast_source = source.dynamic(id="broadcast_source", get_source_for_broadcast)
+
+def dynsource_handle_shutdown() =
+    log("    Dynamic source SHUTDOWN")
+end
+
+def dynsource_handle_wake_up() =
+    log("    Dynamic source WAKE UP")
+end
+
+# add handles on status
+broadcast_source.on_shutdown(dynsource_handle_shutdown)
+broadcast_source.on_wake_up(dynsource_handle_wake_up)
 
 # Create final broadcast output to public icecast
 output.icecast(

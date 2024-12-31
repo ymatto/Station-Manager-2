@@ -311,28 +311,28 @@ end
 def timed_enqueue(command, exec_delay) = # command (list), exec_delay (float, seconds)
     now = time()
     command_time = now + exec_delay # needs to be ref to be visible within func below?
-    log("Timed DJ command received:         " ^ string_of(command) ^ " with execution set to " ^ string_of(exec_delay) ^ " seconds from now")
+    log("Timed DJ command received:         " ^ string(command) ^ " with execution set to " ^ string(exec_delay) ^ " seconds from now")
     command_pair = [(command, command_time)] # timed queue uses absolute times for execution
     timed_command_queue := list.append(timed_command_queue(), command_pair)
     # now sort it by time (least first) so we can just check the head of the list in the command loop
     timed_command_queue := list.sort(sort_command_queue_by_time_ascending, timed_command_queue())
-    # log("timed command queue now: " ^ string_of(timed_command_queue()))
+    # log("timed command queue now: " ^ string(timed_command_queue()))
 end
 
 def trackend_enqueue(command, exec_delay) =
-    log("Trackend DJ command received:      " ^ string_of(command) ^ " with execution delay: " ^ string_of(exec_delay) ^ " after end of this track")
+    log("Trackend DJ command received:      " ^ string(command) ^ " with execution delay: " ^ string(exec_delay) ^ " after end of this track")
     command_pair = [(command, exec_delay)] # trackend queue uses a delay, all of which can be turned into fixed timed_enqueue requests at track end
     trackend_command_queue := list.append(trackend_command_queue(), command_pair)
-    # log("trackend command queue now: " ^ string_of(trackend_command_queue()))
+    # log("trackend command queue now: " ^ string(trackend_command_queue()))
 end
 
 def pre_trackend_enqueue(command, exec_delay) =
-    log("Pre-trackend DJ command received:  " ^ string_of(command) ^ " with execution time: " ^ string_of(exec_delay) ^ " before end of this track")
+    log("Pre-trackend DJ command received:  " ^ string(command) ^ " with execution time: " ^ string(exec_delay) ^ " before end of this track")
     command_pair = [(command, exec_delay)]
     pre_trackend_command_queue := list.append(pre_trackend_command_queue(), command_pair)
     # now sort it by pre-trackend delay (largest first) so we can just look check the head of the list in the command loop
     pre_trackend_command_queue := list.sort(sort_command_queue_by_time_descending, pre_trackend_command_queue())
-    # log("pre-trackend command queue now: " ^ string_of(pre_trackend_command_queue()))
+    # log("pre-trackend command queue now: " ^ string(pre_trackend_command_queue()))
 end
 
 # command-queueable functions
@@ -347,17 +347,19 @@ def set_fadeout_trackend(arg) =
     end
 end
 
-def set_fadeout_instant (arg) =
+def set_fadeout_instant(arg) =
     if (arg == "true") then
         fadeout_instant := true
-    else
+    elsif (arg == "false") then
         fadeout_instant := false
+    else
+        log("Bad arg to set_fadeout_instant")
     end
 end
 
 playover_source = request.queue(id="playover_source") # removed audio_to_stereo at v2.0
 
-def set_voice (voicename) =
+def set_voice(voicename) =
     newvoice = ref ("")
     if (voicename == "normal") then
         newvoice := station_default_voice
@@ -372,7 +374,7 @@ def set_voice (voicename) =
     log("   New voice selected: " ^ newvoice())
 end
 
-def say (text) =
+def say(text) =
     speech_filename = file.temp("SM2_speech_", ".wav")
     if (current_voice() == "") then
         log("No voice configured. \"SAY\" command ignored.")
@@ -402,14 +404,14 @@ end
 
 # show management functions (plus change_show queueable command)
 
-def handle_track_end (metadata) = # TODO figure out how to ignore these required handler parameters
+def handle_track_end(metadata) = # TODO figure out how to ignore these required handler parameters
     # TODO before totally ignoring the metadata data here... it seems to include album art? Use with webpage? If the "logtrack" stuff can't?
     log("  - track change signal -")
     track_endtime := true # triggers the command_loop
 end
 
 
-def change_show (show_name) =
+def change_show(show_name) =
     if (list.assoc(default="error", show_name, show_paths()) != "error") then
         log("  --- New show starting: " ^ show_name ^ " ------------------------------------")
     
@@ -544,7 +546,7 @@ def process_trackend_command_queue() =
 
     remaining_pre_trackend_commands = list.length(pre_trackend_command_queue())
     if (remaining_pre_trackend_commands > 0) then
-        log(string_of(remaining_pre_trackend_commands) ^ " pre-trackend DJ commands present in queue at track's end. Running these first.")
+        log(string(remaining_pre_trackend_commands) ^ " pre-trackend DJ commands present in queue at track's end. Running these first.")
         pre_trackend_command_queue := list.filter(process_pretrackend_commands, pre_trackend_command_queue()) # will just be cleared out
     end
 
@@ -586,7 +588,7 @@ thread.run.recurrent(delay=0.1, command_loop)
 
 # commands for auto DJ
 
-def dj_trackend_enqueue (input_string) =
+def dj_trackend_enqueue(input_string) =
     trimmed_input = string.trim(input_string)
     command_name = ref ("")
     command_arg = ref ("")
@@ -619,7 +621,7 @@ def dj_trackend_enqueue (input_string) =
     end
 end
 
-def dj_timed_enqueue (input_string) =
+def dj_timed_enqueue(input_string) =
     trimmed_input = string.trim(input_string)
     command_name = ref ("")
     command_arg = ref ("")

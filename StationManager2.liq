@@ -156,7 +156,7 @@ list.iter(get_showschedule, showschedule_list)
 
 log("STARTUP: setting up dynamic broadcast...")
 
-# Changing current_output_source will change what is broadcast, using the dynamic broadcast_source
+# Create current_output_source. Changing source contents of this will change what is broadcast, using the dynamic broadcast_source
 current_output_source = ref(blank())
 
 # Handler to get the current dynamic source
@@ -330,7 +330,7 @@ def pre_trackend_enqueue(command, exec_delay) =
     log("Pre-trackend DJ command received:  " ^ string(command) ^ " with execution time: " ^ string(exec_delay) ^ " before end of this track")
     command_pair = [(command, exec_delay)]
     pre_trackend_command_queue := list.append(pre_trackend_command_queue(), command_pair)
-    # now sort it by pre-trackend delay (largest first) so we can just look check the head of the list in the command loop
+    # now sort it by pre-trackend delay (largest first) so we can just check the head of the list in the command loop
     pre_trackend_command_queue := list.sort(sort_command_queue_by_time_descending, pre_trackend_command_queue())
     # log("pre-trackend command queue now: " ^ string(pre_trackend_command_queue()))
 end
@@ -465,7 +465,8 @@ def change_show(show_name) =
     else
         log("No playlist path specified for requested show: " ^ show_name)
     end
-    set_fadeout_trackend("false") # TODO Does this always running cause any problems?
+    # UNDO commenting out...
+    # set_fadeout_trackend("false") # TODO Does this always running cause any problems?
 end
 
 # queue execution functions
@@ -827,11 +828,14 @@ def auto_dj_loop() =
     if (now > up_next_hour_time - 60.0 and track_end_time >= up_next_hour_time) then
         log(" *** AUTO-DJ: Time to handle the hour.")
         if (track_end_time < up_next_hour_time + (10.0 * 60.0)) then # do stuff at the trackend
+            # TODO - maybe ideally don't mostly repeat this code in two places (below), but for now make sure to make changes in both places
             # NOTE ideally this should be an == without the 100.0s slop, but I don't trust my float times
             if (next_scheduled_show_time() < up_next_hour_time + 100.0 and next_scheduled_show_name() != current_scheduled_show_name()) then
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
                 timed_enqueue(["set_fadeout_trackend", "true"], 0.0)
                 trackend_enqueue(["change_show", next_scheduled_show_name()], 3.0)
+                # UNDO testing
+                trackend_enqueue(["set_fadeout_trackend", "false"], 5.0)
                 current_signoff = list.assoc(default="", current_scheduled_show_name(), show_signoffs())
                 if (current_signoff != "") then
                     pre_trackend_enqueue(["say", current_signoff], 40.0)
@@ -847,7 +851,7 @@ def auto_dj_loop() =
                 end
             end
         else # it's time to go but the current track ends 10 minutes after the hour, so just do it without waiting for track end.
-            # NOTE same as above
+            # NOTE mostly same as above
             if (next_scheduled_show_time() < up_next_hour_time + 100.0 and next_scheduled_show_name() != current_scheduled_show_name()) then
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
                 log (" *** AUTO-DJ: Current track ends more than 10 minutes after the hour. ")

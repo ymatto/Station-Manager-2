@@ -435,20 +435,20 @@ def change_show(show_name) =
         # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
         # TODO make the smooth_add stuff (and offset below) a config parameter? per show ideally?
     
-    # THIS IS WHAT WAS BEING USED BEFORE THE BIG DOCKER / v2.3 UPDATE
-    #     new_output_source =
-    #        mksafe(id="switchboard_source",
-    #            smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, 
-    #                    on_offset(id="track_end_handler", offset=0.0, handle_track_end,
-    #                        switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
-    #                            switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
-    #                                show_source
-    #                            ) ] )
-    #                        ) ] )
-    #                    )
-    #                )
-    #            )
-    #        )
+        # THIS IS WHAT WAS BEING USED BEFORE THE BIG DOCKER / v2.3 UPDATE
+        #     new_output_source =
+        #        mksafe(id="switchboard_source",
+        #            smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, 
+        #                    on_offset(id="track_end_handler", offset=0.0, handle_track_end,
+        #                        switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
+        #                            switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
+        #                                show_source
+        #                            ) ] )
+        #                        ) ] )
+        #                    )
+        #                )
+        #            )
+        #        )
 
 
         # First, disconnect the current source from the dynamic source before doing some prep for the new show
@@ -485,8 +485,7 @@ def change_show(show_name) =
     else
         log("No playlist path specified for requested show: " ^ show_name)
     end
-    # Probably can delete after this was moved up.
-    # set_fadeout_trackend("false") # TODO Does this always running cause any problems?
+
 end
 
 # queue execution functions

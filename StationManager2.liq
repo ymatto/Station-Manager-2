@@ -450,7 +450,15 @@ def change_show(show_name) =
     #            )
     #        )
 
-    # TODO: reintroduce use of the playover_source for voices somehow...    
+
+        # First, disconnect the current source from the dynamic source before doing some prep for the new show
+        current_output_source := blank()
+
+        # We can't let the new source start up with this "true" because it will be stuck that way (track end to reevaluate will never come)
+        set_fadeout_trackend("false")
+
+        # Now create the new source for broadcast
+        # TODO: reintroduce use of the playover_source for voices somehow...    
         new_output_source =
                 source.on_track(id="track_end_handler",
                     switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
@@ -477,7 +485,7 @@ def change_show(show_name) =
     else
         log("No playlist path specified for requested show: " ^ show_name)
     end
-    # UNDO commenting out...
+    # Probably can delete after this was moved up.
     # set_fadeout_trackend("false") # TODO Does this always running cause any problems?
 end
 
@@ -846,8 +854,6 @@ def auto_dj_loop() =
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
                 timed_enqueue(["set_fadeout_trackend", "true"], 0.0)
                 trackend_enqueue(["change_show", next_scheduled_show_name()], 3.0)
-                # UNDO testing
-                trackend_enqueue(["set_fadeout_trackend", "false"], 5.0)
                 current_signoff = list.assoc(default="", current_scheduled_show_name(), show_signoffs())
                 if (current_signoff != "") then
                     pre_trackend_enqueue(["say", current_signoff], 40.0)

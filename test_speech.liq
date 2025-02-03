@@ -42,7 +42,7 @@ def thing(input_string) =
     say_request = {text="This is a radio announcement.", output_file="test_announcement.wav"}
     json_say_request = json.stringify(say_request)
 
-    say_response = http.post(data=json_say_request, timeout=5.0, "http://host.docker.internal/")
+    say_response = http.post(data=json_say_request, timeout=5.0, "http://host.docker.internal/say")
 
     log("HTTP POST response: " ^ say_response)
     

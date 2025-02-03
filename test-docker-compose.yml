@@ -1,0 +1,22 @@
+services:
+  icecast:
+    image: libretime/icecast:2.4.4-debian
+    ports:
+      - 8000:8000
+    volumes:
+      - ./icecast.xml:/etc/icecast.xml
+  sm2:
+    image: savonet/liquidsoap:v2.3.0
+#    command: -v StationManager2.liq -- stationconfig.json
+    command: -v test_speech.liq
+    ports:
+#      - 1447:1447
+      - 1234:1234
+    working_dir: /sm2
+    volumes:
+#      - ./:/sm2
+      - type: bind
+        source: ./
+        target: /sm2
+    environment:
+      - "Etc/UTC"

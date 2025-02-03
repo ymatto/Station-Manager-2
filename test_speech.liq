@@ -8,9 +8,6 @@ playover_source = request.queue(id="playover_source")
 
 
 # set this to what you ultimately want going out to icecast
-
-# broadcast_source = add(normalize=true, weights=[0.5,0.5], [playlist_source, playover_source])
-
 # despite last documentation at v1.4.4 for smooth-add, thre is no "delay" parameter, just "duration"
 broadcast_source = smooth_add(duration=1.5, p=0.1, special=playover_source, normal=playlist_source)
     

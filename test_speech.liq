@@ -64,8 +64,8 @@ end
 
 
 server.register(namespace="test",
-    usage="say [<argument>]",
-    description="Do a thing.",
+    usage="say <thing to say>",
+    description="Say a thing.",
     "say",
     say)
 

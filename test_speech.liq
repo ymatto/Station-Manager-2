@@ -37,12 +37,13 @@ settings.server.telnet.bind_addr.set("0.0.0.0")
 settings.server.timeout.set(-1.0) # negative value disables timeout
 
 
-def thing(input_string) =
+def say(input_string) =
+    say_text = string.trim(input_string)
 
-    say_request = {text="This is a radio announcement.", output_file="test_announcement.wav"}
+    say_request = {text=say_text, output_file="test_announcement.wav"}
     json_say_request = json.stringify(say_request)
 
-    say_response = http.post(data=json_say_request, timeout=5.0, "http://host.docker.internal/say")
+    say_response = http.post(data=json_say_request, timeout=5.0, "http://host.docker.internal:3000/say")
 
     log("HTTP POST response: " ^ say_response)
     
@@ -63,8 +64,8 @@ end
 
 
 server.register(namespace="test",
-    usage="thing [<argument>]",
+    usage="say [<argument>]",
     description="Do a thing.",
-    "thing",
-    thing)
+    "say",
+    say)
 

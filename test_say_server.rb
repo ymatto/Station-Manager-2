@@ -1,10 +1,16 @@
-# Pipe say expects JSON messages with the following structure:
+#!/usr/bin/ruby -w
+
+# Expects JSON messages with the following structure:
 #   {"text": "Text to convert to speech", "output_file": "/some/file/path.wav" }
 #
 # The values are fed to `say` like this:
 #   `say --output-file=#{output_file} '#{text}'`
-#
+
+require 'webrick'
 require 'json'
+
+
+
 
 def say(text, output_file)
   cmd = "say --output-file=#{output_file} --data-format=LEI16@44100 --channels=2 '#{text}'"
@@ -27,26 +33,25 @@ rescue => e
   nil
 end
 
+
 ##
-## Main
+## HTTP server
 ##
-def main
-  pipe = ENV['PIPE_PATH']
-  raise "error: expected PIPE_PATH environment variable to be set" unless pipe
-  raise "error: no file found at PIPE_PATH: #{pipe}" unless File.exists?(pipe)
-  raise "error: expected PIPE_PATH to point at a named pipe, but got type: #{File.ftype(pipe)}" unless File.pipe?(pipe)
+port = ENV['PORT'] || 3000
+server = WEBrick::HTTPServer.new :Port => port
+trap 'INT' do server.shutdown end
 
-  f = File.open(pipe, 'r')
-
-  while true do
-    f.each_line do |line|
-      json = parse_json(line)
-
-      if json
-        say(json["text"], json["output_file"])
-      end
+server.mount_proc '/say' do |req, res|
+    request = req.body
+    json = parse_json(request)
+    if json
+        say_text = json["text"]
+        output_file = json["output_file"]
+        say(say_text, output_file)
+        res.body = output_file
+    else
+        res.body = "Bad say request"
     end
-  end
 end
 
-main()
+server.start

@@ -1,6 +1,7 @@
 log("TEST SCRIPT STARTUP...")
 
 
+# SET UP SOURCES
 
 playlist_source = playlist(id="playlist source", "music/funky/")
 
@@ -11,6 +12,7 @@ playover_source = request.queue(id="playover_source")
 # despite last documentation at v1.4.4 for smooth-add, thre is no "delay" parameter, just "duration"
 broadcast_source = smooth_add(duration=1.5, p=0.1, special=playover_source, normal=playlist_source)
     
+
 
 # SET UP TEST BROADCAST
 
@@ -37,8 +39,12 @@ settings.server.telnet.bind_addr.set("0.0.0.0")
 settings.server.timeout.set(-1.0) # negative value disables timeout
 
 
+# SERVER COMMMAND HANDLERS
+
 def say(input_string) =
     say_text = string.trim(input_string)
+
+    log("Say request received: " ^ say_text)
 
     say_request = {text=say_text, output_file="test_announcement.wav"}
     json_say_request = json.stringify(say_request)
@@ -55,11 +61,11 @@ def say(input_string) =
         playover_source.push(request.create("synth:shape=sine,frequency=0.0,duration=3"))
         playover_source.push(request.create("file:" ^ say_file_path ^ ""))
         playover_source.push(request.create("synth:shape=sine,frequency=0.0,duration=1"))
+        "Done."
     else
         log("No response from speech host.")
-    end
-
-    "done."
+        "No response from speech host."
+    end    
 end
 
 

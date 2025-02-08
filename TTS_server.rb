@@ -8,6 +8,7 @@
 
 require 'webrick'
 require 'json'
+require 'date'
 
 
 
@@ -15,12 +16,13 @@ def macos_say(text, voice, output_file)
   cmd = "say --output-file=#{output_file} --data-format=LEI16@44100 --channels=2 -v '#{voice}' '#{text}'"
   puts "--> Executing say command: #{cmd}"
   system(cmd)
+  # TODO make sure the system(cmd) didn't return an error
 end
 
 def parse_json(line)
   parsed = JSON.parse(line)
 
-  if parsed && parsed.key?("text") && parsed.key?("output_file")
+  if parsed && parsed.key?("tts_type") && parsed.key?("voice") && parsed.key?("text") && parsed.key?("output_path")
     parsed
   else
     puts "error: expected JSON to include keys \"text\" and \"output_file\", but one or both are missing: #{line}"
@@ -51,9 +53,11 @@ server.mount_proc '/say' do |req, res|
         tts_type = json["tts_type"]
         voice = json["voice"]
         say_text = json["text"]
-        output_file = json["output_file"]
+        output_path = json["output_path"]
 
         if tts_type == "macos"
+          output_file = output_path + "tts_macos_" + Time.now.strftime("%d-%m-%Y_%H%M%S") + ".wav"
+
           macos_say(say_text, voice, output_file)
 
           res_result = "SUCCESS"

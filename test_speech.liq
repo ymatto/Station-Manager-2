@@ -50,7 +50,7 @@ def say(input_string) =
         tts_type="macos",
         voice="Daniel (Enhanced)",
         text=say_text,
-        output_file="test_announcement.wav"
+        output_path="tmp/"
     }
     json_say_request = json.stringify(say_request)
 

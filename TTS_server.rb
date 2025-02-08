@@ -1,10 +1,14 @@
 #!/usr/bin/ruby -w
 
 # Expects JSON messages with the following structure:
-#   {"text": "Text to convert to speech", "output_file": "/some/file/path.wav" }
+#   {
+#     "tts_type": "macos",
+#     "voice": "Daniel (Enhanced)",
+#     "text": "Hello, my name is Daniel... Enhanced."
+#     "output_path": "tmp/"
+#   }
 #
-# The values are fed to `say` like this:
-#   `say --output-file=#{output_file} '#{text}'`
+# The values are fed to a supported TTS tool, and a complete path to the resulting file returned.
 
 require 'webrick'
 require 'json'
@@ -75,11 +79,12 @@ server.mount_proc '/say' do |req, res|
             res_result = "ERROR"
             res_data = "TTS command returned error or does not exist"
           end
-        # don't have a handler for whatever the client asked for
+        # we don't have a handler for whatever the client asked for
         else
           res_result = "ERROR"
           res_data = "TTS type not recognized"
         end
+    # bad JSON from the requester
     else
         res_result = "ERROR"
         res_data = "Bad say request"

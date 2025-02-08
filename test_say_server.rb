@@ -11,9 +11,8 @@ require 'json'
 
 
 
-
-def say(text, output_file)
-  cmd = "say --output-file=#{output_file} --data-format=LEI16@44100 --channels=2 '#{text}'"
+def macos_say(text, voice, output_file)
+  cmd = "say --output-file=#{output_file} --data-format=LEI16@44100 --channels=2 -v '#{voice}' '#{text}'"
   puts "--> Executing say command: #{cmd}"
   system(cmd)
 end
@@ -44,14 +43,36 @@ trap 'INT' do server.shutdown end
 server.mount_proc '/say' do |req, res|
     request = req.body
     json = parse_json(request)
+
+    res_result = "ERROR"
+    res_data = ""
+
     if json
+        tts_type = json["tts_type"]
+        voice = json["voice"]
         say_text = json["text"]
         output_file = json["output_file"]
-        say(say_text, output_file)
-        res.body = output_file
+
+        if tts_type == "macos"
+          macos_say(say_text, voice, output_file)
+
+          res_result = "SUCCESS"
+          res_data = output_file
+        else
+          res_result = "ERROR"
+          res_data = "TTS type not recognized"
+        end
     else
-        res.body = "Bad say request"
+        res_result = "ERROR"
+        res_data = "Bad say request"
     end
+
+    response = {
+      'result' => res_result,
+      'data' => res_data
+    }
+    # return response to POST
+    res.body = JSON[response]
 end
 
 server.start

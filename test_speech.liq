@@ -46,16 +46,24 @@ def say(input_string) =
 
     log("Say request received: " ^ say_text)
 
-    say_request = {text=say_text, output_file="test_announcement.wav"}
+    say_request = {
+        tts_type="macos",
+        voice="Daniel (Enhanced)",
+        text=say_text,
+        output_file="test_announcement.wav"
+    }
     json_say_request = json.stringify(say_request)
 
-    say_response = http.post(data=json_say_request, timeout=5.0, "http://host.docker.internal:3000/say")
+    json_say_response = http.post(data=json_say_request, timeout=20.0, "http://host.docker.internal:3000/say")
 
-    log("HTTP POST response: " ^ say_response)
-    
-    if (say_response != "") then
+    # parse JSON response
+    let json.parse say_response = json_say_response
+    result = say_response.result ?? "ERROR"
+    data = say_response.data ?? "Bad response from TTS script"
+
+    if (result == "SUCCESS") then
         # TODO probably should also check to see if there's a valid wav or something ideally.
-        say_file_path = say_response
+        say_file_path = data
 
         # Queue up the speech along with some bookending silence
         playover_source.push(request.create("synth:shape=sine,frequency=0.0,duration=3"))
@@ -63,8 +71,9 @@ def say(input_string) =
         playover_source.push(request.create("synth:shape=sine,frequency=0.0,duration=1"))
         "Done."
     else
-        log("No response from speech host.")
-        "No response from speech host."
+        error = data
+        log(error)
+        error
     end    
 end
 

@@ -11,12 +11,18 @@ require 'json'
 require 'date'
 
 
-
+# TTS handler functions
 def macos_say(text, voice, output_file)
-  cmd = "say --output-file=#{output_file} --data-format=LEI16@44100 --channels=2 -v '#{voice}' '#{text}'"
+  # clean up the strings for safety
+  text = text.delete('"')
+  voice = voice.delete('"')
+  output_file = output_file.delete('"')
+
+  cmd = "say --output-file=\"#{output_file}\" --data-format=LEI16@44100 --channels=2 -v \"#{voice}\" \"#{text}\""
   puts "--> Executing say command: #{cmd}"
   system(cmd)
 end
+
 
 def parse_json(line)
   parsed = JSON.parse(line)
@@ -54,8 +60,11 @@ server.mount_proc '/say' do |req, res|
         say_text = json["text"]
         output_path = json["output_path"]
 
+        timestamp = Time.now.strftime("%d-%m-%Y_%H%M%S")
+
+        # other TTS handlers can go in here
         if tts_type == "macos"
-          output_file = output_path + "tts_macos_" + Time.now.strftime("%d-%m-%Y_%H%M%S") + ".wav"
+          output_file = "#{output_path}tts_macos_#{timestamp}.wav"
 
           system_result = macos_say(say_text, voice, output_file)
 
@@ -66,6 +75,7 @@ server.mount_proc '/say' do |req, res|
             res_result = "ERROR"
             res_data = "TTS command returned error or does not exist"
           end
+        # don't have a handler for whatever the client asked for
         else
           res_result = "ERROR"
           res_data = "TTS type not recognized"

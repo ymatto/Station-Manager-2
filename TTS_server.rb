@@ -16,7 +16,6 @@ def macos_say(text, voice, output_file)
   cmd = "say --output-file=#{output_file} --data-format=LEI16@44100 --channels=2 -v '#{voice}' '#{text}'"
   puts "--> Executing say command: #{cmd}"
   system(cmd)
-  # TODO make sure the system(cmd) didn't return an error
 end
 
 def parse_json(line)
@@ -58,10 +57,15 @@ server.mount_proc '/say' do |req, res|
         if tts_type == "macos"
           output_file = output_path + "tts_macos_" + Time.now.strftime("%d-%m-%Y_%H%M%S") + ".wav"
 
-          macos_say(say_text, voice, output_file)
+          system_result = macos_say(say_text, voice, output_file)
 
-          res_result = "SUCCESS"
-          res_data = output_file
+          if system_result
+            res_result = "SUCCESS"
+            res_data = output_file
+          else
+            res_result = "ERROR"
+            res_data = "TTS command returned error or does not exist"
+          end
         else
           res_result = "ERROR"
           res_data = "TTS type not recognized"

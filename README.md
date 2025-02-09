@@ -13,7 +13,7 @@ Using the main `docker-compose.yml` and Station Manager 2 config to run in the b
 `docker compose up -d`
 
 Single-running the main `docker-compose.yml` for easy debugging:
-`docker compose up --abort-on-container-exit `
+`docker compose up --abort-on-container-exit`
 
 Single-running with the test yml for standalone test scripts:
 `docker compose -f test-docker-compose.yml up --abort-on-container-exit`

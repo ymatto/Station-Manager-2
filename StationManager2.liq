@@ -1,7 +1,6 @@
 #!/Users/omm/.opam/default/bin/liquidsoap -v
 # If not running this from the commandline (such as launchd), make sure to include '--' before the configuration file argument
 # ie.: /Users/omm/Basscadet/StationManager2.liq -- stationconfig.json
-# NOTE if this is being run by launchd on the mac, voice synthesis requires it run as an agent, not a daemon (because "say" is a GUI app)
 
 
 
@@ -22,6 +21,7 @@ station_description = stationconfig.description ?? ""
 station_spoken_ID = stationconfig.spoken_ID ?? ""
 station_voice_type = stationconfig.voice_type ?? ""
 station_default_voice = stationconfig.default_voice ?? ""
+station_tts_server_endpoint = stationconfig.tts_server_endpoint ?? ""
 station_log_path = stationconfig.log_path ?? ""
 station_tracklog_path = stationconfig.tracklog_path ?? ""
 station_currentshow_path = stationconfig.currentshow_path ?? ""
@@ -386,27 +386,48 @@ def set_voice(voicename) =
     log("   New voice selected: " ^ newvoice())
 end
 
-def say(text) =
-    speech_filename = file.temp("SM2_speech_", ".wav")
-    if (current_voice() == "") then
-        log("No voice configured. \"SAY\" command ignored.")
-    else
-        if (station_voice_type == "mac") then
-            # NOTE The 3500ms of silence is to compensate for the fade time on the playover_source
-            command_string = "say -o " ^ speech_filename ^ " --data-format=LEI16@44100 --channels=2 -v \"" ^ current_voice() ^ "\" \"[[ slnc 3500 ]] " ^ text ^ " [[ slnc 1000 ]]\""
-            process_return = process.run(timeout = 30.0, command_string)
-            if (process_return.stderr != "") then
-                log("SAY DJ COMMAND FAILED:")
-                log("#{process_return.stderr}")
-            else
-                log("SPEAKING [" ^ current_voice() ^ "]: " ^ text)
-                ignore(server.execute("playover_source.push " ^ speech_filename)) # NOTE Likely will change in later version of LiquidSoap
-            end
+
+def playover(file_path) =
+    # Queue up the speech along with some bookending silence
+    playover_source.push(request.create("synth:shape=sine,frequency=0.0,duration=3"))
+    playover_source.push(request.create("file:" ^ file_path))
+    playover_source.push(request.create("synth:shape=sine,frequency=0.0,duration=1"))
+end
+
+def say(thing_to_say) =
+    suffix = string.lowercase(string.sub(thing_to_say, start=(string.length(thing_to_say) - 4), length=4))
+    if (suffix==".wav" or suffix==".mp3" or suffix==".ogg") then
+        playover(thing_to_say)
+    # TODO add more voice types, whether using tts_server or LS-native approach (non-docker only)    
+    elsif (station_voice_type == "tts_server_macos") then
+        say_request = {
+            tts_type="macos",
+            voice=current_voice(),
+            text=thing_to_say,
+            output_path="tmp/"
+        }
+        json_say_request = json.stringify(say_request)
+
+        # call the TTS server endpoint
+        json_say_response = http.post(data=json_say_request, timeout=30.0, station_tts_server_endpoint)
+
+        # parse JSON response
+        let json.parse say_response = json_say_response
+        result = say_response.result ?? "ERROR"
+        data = say_response.data ?? "Bad response from TTS script"
+        if (result == "SUCCESS") then
+            # TODO probably should also check to see if there's a valid wav or something ideally.
+            say_file_path = data
+            playover(say_file_path)
         else
-            log("Station voice_type not set to supported speech synthesizer. SAY command ignored.")
-        end
+            error = data
+            log("TTS error: " ^ error)
+        end  
+    else
+        log("Station voice_type not supported. SAY command ignored.")
     end
 end
+
 
 def skip () =
     source.skip(current_show_source()) 
@@ -433,23 +454,6 @@ def change_show(show_name) =
         current_show_source := show_source
     
         # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
-        # TODO make the smooth_add stuff (and offset below) a config parameter? per show ideally?
-    
-        # THIS IS WHAT WAS BEING USED BEFORE THE BIG DOCKER / v2.3 UPDATE
-        #     new_output_source =
-        #        mksafe(id="switchboard_source",
-        #            smooth_add(duration=0.5, p=0.1, special=playover_source, normal=crossfade(duration=5.0, 
-        #                    on_offset(id="track_end_handler", offset=0.0, handle_track_end,
-        #                        switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
-        #                            switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
-        #                                show_source
-        #                            ) ] )
-        #                        ) ] )
-        #                    )
-        #                )
-        #            )
-        #        )
-
 
         # First, disconnect the current source from the dynamic source before doing some prep for the new show
         current_output_source := blank()
@@ -460,13 +464,15 @@ def change_show(show_name) =
         # Now create the new source for broadcast
         # TODO: reintroduce use of the playover_source for voices somehow...    
         new_output_source =
-                source.on_track(id="track_end_handler",
+            smooth_add(duration=1.5, p=0.1, special=playover_source,
+                normal=source.on_track(id="track_end_handler",
                     switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
                         switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
                             show_source
                         ) ] )
                     ) ] )
                 , handle_track_end)
+            )
 
         # Set the source used by the dynamic broadcast source
         current_output_source := new_output_source

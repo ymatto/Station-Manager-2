@@ -1,10 +1,32 @@
-Create network "sm2"
-    docker network create sm2
+= Introduction
 
-Icecast (set up container once to listen for input):
-    docker run -d -p 8000:8000 -v ./icecast.xml:/etc/icecast.xml --network sm2 --network-alias icecast libretime/icecast:2.4.4-debian
+**Station Manager 2** is a system using Liquidsoap that makes it easy to set up and operate fully automated netradio stations. Shows may be defined by folders of audio files, with shows scheduled to play at different times of day across the week.
 
-Liquid Soap with test config (run at CLI as needed for testing, verbose mode in Liquid Soap):
-    docker run --rm -p 1447:1447 -w /test -v "$(pwd):/test" --network sm2 -e "TZ=Etc/UTC" savonet/liquidsoap:v2.3.0 -v StationManager2.liq -- stationconfig.json
+The included `docker-compose.yml` and example json configuration files make it easy to start up an example station, including icecast broadcast, which can then be modified to suit.
 
-... or just use the docker-compose.yml file
+The included `TTS_server.rb` script can also be optionally used to enable automated voice synthesis for your station's DJ. This script must be run separately from the core docker compose setup.
+
+
+= Running Station Manager 2
+
+Using the main `docker-compose.yml` and Station Manager 2 config to run in the background:
+`docker compose up -d`
+
+Single-running the main `docker-compose.yml` for easy debugging:
+`docker compose up --abort-on-container-exit `
+
+Single-running with the test yml for standalone test scripts:
+`docker compose -f test-docker-compose.yml up --abort-on-container-exit`
+
+
+= What's Included
+
+...
+
+
+= Configuration
+
+...
+
+
+= Roadmap

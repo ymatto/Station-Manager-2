@@ -14,7 +14,6 @@ services:
       - 1234:1234
     working_dir: /sm2
     volumes:
-#      - ./:/sm2
       - type: bind
         source: ./
         target: /sm2

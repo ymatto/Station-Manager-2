@@ -18,7 +18,7 @@ let json.parse stationconfig = stationconfig_file
 
 station_name = stationconfig.name ?? ""
 station_description = stationconfig.description ?? ""
-station_spoken_ID = stationconfig.spoken_ID ?? ""
+station_id_announcement = stationconfig.id_announcement ?? ""
 station_voice_type = stationconfig.voice_type ?? ""
 station_default_voice = stationconfig.default_voice ?? ""
 station_tts_server_endpoint = stationconfig.tts_server_endpoint ?? ""
@@ -67,8 +67,8 @@ show_paths = ref ([]) # ("Beats", "files/Instrumental Hip-Hop"), ("Groovestyle",
 show_longnames = ref ([]) # ("Beats", "Straight Beats"), ("Groovestyle", "Groovestyle"), ...
 show_descriptions = ref([]) # ("Beats", "instrumental hip-hop"), ("Groovestyle", "your personal soundtrack")
 show_voices = ref ([]) # ("Beats", "Whisper"), ("Groovestyle", "Ava"), ...
-show_signons = ref ([])
-show_signoffs = ref ([])
+show_signon_announcements = ref ([])
+show_signoff_announcements = ref ([])
 show_shuffle_modes = ref ([])
 
 showconfig_file = file.contents(station_showconfig_path)
@@ -79,8 +79,8 @@ let json.parse (show_list : [(
         show_longname: string?,
         show_description: string?,
         DJ_voice: string?,
-        signon: string?, 
-        signoff: string?,
+        signon_announcement: string?, 
+        signoff_announcement: string?,
         shuffle_mode: string?  
     }
 )] as json.object ) = showconfig_file
@@ -95,10 +95,10 @@ def get_show(thisshow) =
     show_longnames := list.append([(thisshowkey, thisshowlongname)], show_longnames())
     thisshowDJvoice = thisshowdata.DJ_voice ?? ""
     show_voices := list.append([(thisshowkey, thisshowDJvoice)], show_voices())
-    thissignon = thisshowdata.signon ?? ""
-    show_signons := list.append([(thisshowkey, thissignon)], show_signons())
-    thissignoff = thisshowdata.signoff ?? ""
-    show_signoffs := list.append([(thisshowkey, thissignoff)], show_signoffs())
+    thissignonannouncement = thisshowdata.signon_announcement ?? ""
+    show_signon_announcements := list.append([(thisshowkey, thissignonannouncement)], show_signon_announcements())
+    thissignoffannouncement = thisshowdata.signoff_announcement ?? ""
+    show_signoff_announcements := list.append([(thisshowkey, thissignoffannouncement)], show_signoff_announcements())
     thisshuffle_mode = thisshowdata.shuffle_mode ?? "songs" # TODO: make actually do something
     show_shuffle_modes := list.append([(thisshowkey, thisshuffle_mode)], show_shuffle_modes())
 end
@@ -859,18 +859,18 @@ def auto_dj_loop() =
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
                 timed_enqueue(["set_fadeout_trackend", "true"], 0.0)
                 trackend_enqueue(["change_show", next_scheduled_show_name()], 3.0)
-                current_signoff = list.assoc(default="", current_scheduled_show_name(), show_signoffs())
-                if (current_signoff != "") then
-                    pre_trackend_enqueue(["say", current_signoff], 40.0)
+                current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
+                if (current_signoff_announcement != "") then
+                    pre_trackend_enqueue(["say", current_signoff_announcement], 40.0)
                 end
-                next_signon = list.assoc(default=station_spoken_ID, next_scheduled_show_name(), show_signons())
-                if (next_signon != "") then
-                    trackend_enqueue(["say", next_signon], 13.0)
+                next_signon_announcement = list.assoc(default=station_id_announcement, next_scheduled_show_name(), show_signon_announcements())
+                if (next_signon_announcement != "") then
+                    trackend_enqueue(["say", next_signon_announcement], 13.0)
                 end
             else # no scheduled show switch this hour, so see about doing a station ID
-                if (station_spoken_ID != "") then
+                if (station_id_announcement != "") then
                     log(" *** AUTO-DJ: Time for a station ID announcement.")
-                    pre_trackend_enqueue(["say", station_spoken_ID], 12.0)
+                    pre_trackend_enqueue(["say", station_id_announcement], 12.0)
                 end
             end
         else # it's time to go but the current track ends 10 minutes after the hour, so just do it without waiting for track end.
@@ -881,18 +881,18 @@ def auto_dj_loop() =
                 timed_enqueue(["set_fadeout_instant", "true"], 40.0)
                 timed_enqueue(["change_show", next_scheduled_show_name()], 43.0)
                 timed_enqueue(["set_fadeout_instant", "false"], 43.1)
-                current_signoff = list.assoc(default="", current_scheduled_show_name(), show_signoffs())
-                if (current_signoff != "") then
-                    timed_enqueue(["say", current_signoff], 0.0)
+                current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
+                if (current_signoff_announcement != "") then
+                    timed_enqueue(["say", current_signoff_announcement], 0.0)
                 end
-                next_signon = list.assoc(default=station_spoken_ID, next_scheduled_show_name(), show_signons())
-                if (next_signon != "") then
-                    timed_enqueue(["say", next_signon], 63.0)
+                next_signon_announcement = list.assoc(default=station_id_announcement, next_scheduled_show_name(), show_signon_announcements())
+                if (next_signon_announcement != "") then
+                    timed_enqueue(["say", next_signon_announcement], 63.0)
                 end
             else # no scheduled show switch this hour, so see about doing a station ID right around the hour
-                if (station_spoken_ID != "") then
+                if (station_id_announcement != "") then
                     log(" *** AUTO-DJ: Time for a station ID announcement.")
-                    timed_enqueue(["say", station_spoken_ID], 60.0)
+                    timed_enqueue(["say", station_id_announcement], 60.0)
                 end
             end
         end

@@ -40,6 +40,8 @@ station_telnet_server = stationconfig.telnet_server ?? false
 station_telnet_server_port = stationconfig.telnet_server_port ?? 1234
 station_telnet_server_timeout = float_of_int(stationconfig.telnet_server_timeout ?? 60)
 station_telnet_server_netmask = stationconfig.telnet_server_netmask ?? "0.0.0.0"
+station_announcements_path = stationconfig.announcements_path ?? ""
+station_tts_announcements_path = stationconfig.tts_announcements_path ?? ""
 
 # Logs setup
 settings.log.file.path.set(station_log_path)
@@ -397,14 +399,14 @@ end
 def say(thing_to_say) =
     suffix = string.lowercase(string.sub(thing_to_say, start=(string.length(thing_to_say) - 4), length=4))
     if (suffix==".wav" or suffix==".mp3" or suffix==".ogg") then
-        playover(thing_to_say)
+        playover(station_announcements_path ^ thing_to_say)
     # TODO add more voice types, whether using tts_server or LS-native approach (non-docker only)    
     elsif (station_voice_type == "tts_server_macos") then
         say_request = {
             tts_type="macos",
             voice=current_voice(),
             text=thing_to_say,
-            output_path="tmp/"
+            output_path=station_tts_announcements_path
         }
         json_say_request = json.stringify(say_request)
 

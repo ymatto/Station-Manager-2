@@ -15,3 +15,4 @@ services:
       - ./:/sm2
     environment:
       - "Etc/UTC"
+    restart: unless-stopped

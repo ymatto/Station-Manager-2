@@ -8,6 +8,12 @@
 #   }
 #
 # The values are fed to a supported TTS tool, and a complete path to the resulting file returned.
+#
+# Use environment variables to set:
+#   PORT (defaults to 3000) for the port the server will listen for requests
+#   ENDPOINT (defaults to "/say") for the HTTP path for the endpoint for requests
+#   OUTPUT_PATH (defaults to "tmp/") for the resulting audio file
+#     If using TTS_server with a client calling from docker, make sure the OUTPUT_PATH is visible to the docker environment.
 
 require 'webrick'
 require 'json'
@@ -47,10 +53,12 @@ end
 ## HTTP server
 ##
 port = ENV['PORT'] || 3000
+endpoint = ENV['ENDPOINT'] || "/say"
+output_path = ENV['OUTPUT_PATH'] || "tmp/"
 server = WEBrick::HTTPServer.new :Port => port
 trap 'INT' do server.shutdown end
 
-server.mount_proc '/say' do |req, res|
+server.mount_proc endpoint do |req, res|
     request = req.body
     json = parse_json(request)
 
@@ -68,7 +76,7 @@ server.mount_proc '/say' do |req, res|
         if tts_type == "macos"
           # TODO make the output location configred via ENV or something, where the client knows where to look
           output_filename = "tts_macos_#{timestamp}.wav"
-          output_file = "tmp/#{output_filename}"
+          output_file = "#{output_path}#{output_filename}"
 
           system_result = macos_say(say_text, voice, output_file)
 

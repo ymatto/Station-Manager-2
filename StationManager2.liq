@@ -406,7 +406,6 @@ def say(thing_to_say) =
             tts_type="macos",
             voice=current_voice(),
             text=thing_to_say,
-            output_path=station_tts_announcements_path
         }
         json_say_request = json.stringify(say_request)
 
@@ -419,7 +418,7 @@ def say(thing_to_say) =
         data = say_response.data ?? "Bad response from TTS script"
         if (result == "SUCCESS") then
             # TODO probably should also check to see if there's a valid wav or something ideally.
-            say_file_path = data
+            say_file_path = station_tts_announcements_path ^ data
             playover(say_file_path)
         else
             error = data

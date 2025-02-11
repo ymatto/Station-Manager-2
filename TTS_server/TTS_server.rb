@@ -5,7 +5,6 @@
 #     "tts_type": "macos",
 #     "voice": "Daniel (Enhanced)",
 #     "text": "Hello, my name is Daniel... Enhanced."
-#     "output_path": "tmp/"
 #   }
 #
 # The values are fed to a supported TTS tool, and a complete path to the resulting file returned.
@@ -31,7 +30,7 @@ end
 def parse_json(line)
   parsed = JSON.parse(line)
 
-  if parsed && parsed.key?("tts_type") && parsed.key?("voice") && parsed.key?("text") && parsed.key?("output_path")
+  if parsed && parsed.key?("tts_type") && parsed.key?("voice") && parsed.key?("text")
     parsed
   else
     puts "error: expected JSON to include keys \"text\" and \"output_file\", but one or both are missing: #{line}"
@@ -62,19 +61,21 @@ server.mount_proc '/say' do |req, res|
         tts_type = json["tts_type"]
         voice = json["voice"]
         say_text = json["text"]
-        output_path = json["output_path"]
 
         timestamp = Time.now.strftime("%d-%m-%Y_%H%M%S")
 
         # other TTS handlers can go in here
         if tts_type == "macos"
-          output_file = "#{output_path}tts_macos_#{timestamp}.wav"
+          # TODO make the output location configred via ENV or something, where the client knows where to look
+          output_filename = "tts_macos_#{timestamp}.wav"
+          output_file = "tmp/#{output_filename}"
 
           system_result = macos_say(say_text, voice, output_file)
 
           if system_result
             res_result = "SUCCESS"
-            res_data = output_file
+            # we just return the filename because the client needs to know where to look
+            res_data = output_filename
           else
             res_result = "ERROR"
             res_data = "TTS command returned error or does not exist"

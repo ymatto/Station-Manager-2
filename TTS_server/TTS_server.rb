@@ -1,19 +1,5 @@
 #!/usr/bin/ruby -w
 
-# Expects JSON messages with the following structure:
-#   {
-#     "tts_type": "macos",
-#     "voice": "Daniel (Enhanced)",
-#     "text": "Hello, my name is Daniel... Enhanced."
-#   }
-#
-# The values are fed to a supported TTS tool, and a complete path to the resulting file returned.
-#
-# Use environment variables to set:
-#   PORT (defaults to 3000) for the port the server will listen for requests
-#   ENDPOINT (defaults to "/say") for the HTTP path for the endpoint for requests
-#   OUTPUT_PATH (defaults to "tmp/") for the resulting audio file
-#     If using TTS_server with a client calling from docker, make sure the OUTPUT_PATH is visible to the docker environment.
 
 require 'webrick'
 require 'json'

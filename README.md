@@ -20,8 +20,7 @@ Single-running the main `docker-compose.yml` for easy debugging:
 Single-running with the test yml for standalone test scripts:
 `docker compose -f test-docker-compose.yml up --abort-on-container-exit`
 
-To run the TTS server script with default config:
-`TTS_server/TTS_server.rb`
+To run the TTS server script with default config, run `TTS_server.rb` within its folder:
 
 
 ## What's Included

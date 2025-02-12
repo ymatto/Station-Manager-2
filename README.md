@@ -46,7 +46,7 @@ Here is a breakdown of the available parameters in the json config files.
 The station config is a JSON dictionary with the following possible keys. Keys with default values may be omitted, but keys that are REQUIRED must be specified in the file to successfully create a station.
 
 | Key | Type | Default | Description
-| :--- | :---: | :---: | :---
+| :--- | :---: | :---: | :------------------------
 | showconfig_path         | String | `showconfig.json` | Path to the show config file to use
 | showschedule_path       | String | `showschedule.json` | Path to the show schedule file to use
 | playlists_root         | String | `music/` | Path to folder containing playlist folders to be identified by name for shows

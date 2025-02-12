@@ -66,7 +66,7 @@ The station config is a JSON dictionary with the following possible keys. Keys w
 | id_announcement        | String | (empty) | Text, or path to audio file within the station's `announcements_path`, used for hourly station IDs
 | voice_type             | String | (empty) | The TTS handler used for announcements. If the voice_type is unsupported, announcements must be paths to prerecorded audio files rather than text to speak. Currently only `tts_server_macos` is supported, using the TTS_server script (see below)
 | default_voice          | String | (empty) | Voice to specify to TTS handler, if the show has not specified one
-| tts_server_endpoint    | String | `http://host.docker.internal:3000/say` | URL where you have configured the TTS_server script to listen, if a TTS handler has been specified for the voice_type
+| tts_server_endpoint    | String | `http:// host.docker.internal:3000 /say` | URL where you have configured the TTS_server script to listen, if a TTS handler has been specified for the voice_type
 | log_path               | String | `logs/StationManager2.log` | Path to general running log from Liquidsoap. If set to empty, no log is written
 | tracklog_path          | String | `logs/recent_tracks.log` | Path to a list of the most recently played tracks. If set to empty, no log is written
 | currentshow_path       | String | `logs/current_show.log` | Path to a file listing the currently-playing show. If set ot empty, no long is written

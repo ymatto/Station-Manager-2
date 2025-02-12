@@ -26,7 +26,7 @@ To run the TTS server script with default config, run `TTS_server.rb` within its
 
 
 
-## Configuring your netradio station
+## Configuring Your Netradio Station
 
 Station Manager is designed to let you act as the owner of a netradio station that runs like a traditional AM/FM broadcast station. You define the shows that will run on your station, the playlist of music those shows will play, "who" will DJ those shows, and the schedule of shows 24/7.
 
@@ -90,12 +90,12 @@ Each show schedule entry is a dictionary with the following keys:
 ...
 
 
-## Configuring Icecast for broadcast
+## Configuring Icecast for Broadcast
 
 ...
 
 
-## Configuring the TTS server (optional)
+## Configuring the TTS Server (optional)
 
 The TTS_server Ruby script gives your DJs an automatic voice, speaking various bits of text in a voice you choose. Currently it only runs on a MacOS host, using the Mac's built-in "say" command, but will be expanded for other Text-To-Speech options.
 

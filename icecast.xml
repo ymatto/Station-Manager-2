@@ -49,14 +49,15 @@
 
     <paths>
         <!-- basedir is only used if chroot is enabled -->
-        <basedir>/usr/local/Cellar/icecast/2.4.4_2/share/icecast</basedir>
+        <basedir>/usr/share/icecast</basedir>
 
         <!-- Note that if <chroot> is turned on below, these paths must both
              be relative to the new root, not the original root -->
-        <logdir>/tmp</logdir>
-        <webroot>/usr/local/Cellar/icecast/2.4.4_2/share/icecast/web</webroot>
-        <adminroot>/usr/local/Cellar/icecast/2.4.4_2/share/icecast/admin</adminroot>
+        <logdir>/var/log/icecast</logdir>
+        <webroot>/usr/share/icecast/web</webroot>
+        <adminroot>/usr/share/icecast/admin</adminroot>
 
+        <alias source="/status" destination="/status.xsl"/>
 
         <!-- Test station -->
         <alias source="/sm2_test" destination="/sm2_test.mp3"/>

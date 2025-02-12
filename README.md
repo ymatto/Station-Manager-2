@@ -6,7 +6,7 @@
 
 The main logic of Station Manager 2 is the `StationManager2.liq` Liquidsoap script file, which runs your playlist-based shows and expects to be able to output to an Icecast server for broadcast.
 
-The included `docker-compose.yml` makes it easy to start up an example station using dockerized Liquidsoap and Icecast. It makes use of the included example json configuration files, and example `icecast.xml`  including Icecast broadcast, which can then be modified to suit. Docker-based operation is recommended, but Station Manager 2 can also be configured for use with locally-installed Liquidsoap and Icecast.
+The included `docker-compose.yml` makes it easy to start up an example station using dockerized Liquidsoap and Icecast with any additional installation (as long as you have Docker). It makes use of the included example json configuration files, and example `icecast.xml`  including Icecast broadcast, which can then be modified to suit. Docker-based operation is recommended, but Station Manager 2 can also be configured for use with locally-installed Liquidsoap and Icecast.
 
 The included Text-To-Speech `TTS_server.rb` script can also be optionally used to enable automated voice synthesis for your station's DJ. This script must be run separately from the core docker compose setup.
 

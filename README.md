@@ -47,11 +47,9 @@ The station config is a JSON dictionary with the following possible keys. Keys w
 
 | Key | Type | Default | Description
 | :--- | :---: | :---: | :---
-
 | showconfig_path         | String | `showconfig.json` | Path to the show config file to use
 | showschedule_path       | String | `showschedule.json` | Path to the show schedule file to use
 | playlists_root         | String | `music/` | Path to folder containing playlist folders to be identified by name for shows
-
 | icecast_name            | String | (empty) | Name used in Icecast metadata
 | icecast_description     | String | `A Station Manager 2 netradio station` | Description used in Icecast metadata
 | icecast_genre           | String | (empty) | Genre used in Icecast metadata
@@ -61,12 +59,10 @@ The station config is a JSON dictionary with the following possible keys. Keys w
 | icecast_password       | String | REQUIRED | Password Icecast requires for input audio
 | icecast_host           | String | `localhost` | Where station manager can find the Icecast host. If running dockerized, this will often be the mount name applied to the Icecast container
 | icecast_port           | Number | 8000 | Port where Icecast communicates
-
 | id_announcement        | String | (empty) | Text, or path to audio file, used for hourly station IDs
 | voice_type             | String | (empty) | The TTS handler used for announcements. If the voice_type is unsupported, announcements must be paths to prerecorded audio files rather than text to speak. Currently only `tts_server_macos` is supported, using the TTS_server script (see below)
 | default_voice          | String | (empty) | Voice to specify to TTS handler, if the show has not specified one
 | tts_server_endpoint    | String | `http://host.docker.internal:3000/say` | URL where you have configured the TTS_server script to listen, if a TTS handler has been specified for the voice_type
-
 | log_path               | String | `logs/StationManager2.log` | Path to general running log from Liquidsoap. If set to empty, no log is written
 | tracklog_path          | String | `logs/recent_tracks.log` | Path to a list of the most recently played tracks. If set to empty, no log is written
 | currentshow_path       | String | `logs/current_show.log` | Path to a file listing the currently-playing show. If set ot empty, no long is written
@@ -74,7 +70,6 @@ The station config is a JSON dictionary with the following possible keys. Keys w
 | telnet_server_port     | Number | 1234 | Port where the server listens
 | telnet_server_timeout  | Number | 60 | Seconds that an inactive telnet connection remains alive. Set to a negative number to keep it open indefinitely
 | telnet_server_netmask  | String | "0.0.0.0" | Netmask for allowed telnet server connections
-
 | announcements_path     | String | `announcements/` | Path to folder containing pre-recorded announcement audio files that may be referenced by filename
 | tts_announcements_path | String | `TTS_server/tmp/` | Path to folder where the TTS_server script is configured to write out audio files for use
 

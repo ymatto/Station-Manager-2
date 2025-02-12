@@ -6,45 +6,58 @@
 
 # LOAD STATIONCONFIG
 
-log("STARTUP: loading stationconfig...")
+log("STARTUP")
 
-stationconfig_file = file.contents(argv(default="", 1)) # TODO: allow script to proceed with defaults without argv?
+stationconfig_filename = argv(default="stationconfig.json", 1)
+log("Loading station congifuration from " ^ stationconfig_filename)
+
+if not file.exists(stationconfig_filename) then
+    shutdown()
+end
+stationconfig_file = file.contents(stationconfig_filename)
+
 
 let json.parse stationconfig = stationconfig_file
 
 # TODO: Halt script if certain minimum things aren't set?
-# TODO: Consider better defaults and implications
 # TODO: These should maybe all be refs so that a new config file can be loaded runtime, and so they're okay even if not used
 
-station_name = stationconfig.name ?? ""
-station_description = stationconfig.description ?? ""
+station_showconfig_path = stationconfig.showconfig_path ?? "showconfig.json"
+station_showschedule_path = stationconfig.showschedule_path ?? "showschedule.json"
+station_playlists_root = ref (stationconfig.playlists_root ?? "music/") # TODO: better way than using ref?
+
+station_icecast_name = stationconfig.icecast_name ?? ""
+station_icecast_description = stationconfig.icecast_description ?? ""
+%include "encoding_formats.liq"
+station_icecast_encoding = list.assoc(default=%mp3, stationconfig.icecast_encoding ?? "mp3_128k", encoding_formats)
+station_icecast_host = stationconfig.icecast_host ?? "localhost"
+station_icecast_port = stationconfig.icecast_port ?? 8000
+station_icecast_mount = stationconfig.icecast_mount ?? "radio.mp3"
+station_icecast_genre = stationconfig.icecast_genre ?? ""
+station_icecast_url = stationconfig.icecast_url ?? ""
+station_icecast_password = stationconfig.icecast_password ?? ""
+
 station_id_announcement = stationconfig.id_announcement ?? ""
 station_voice_type = stationconfig.voice_type ?? ""
 station_default_voice = stationconfig.default_voice ?? ""
-station_tts_server_endpoint = stationconfig.tts_server_endpoint ?? ""
-station_log_path = stationconfig.log_path ?? ""
-station_tracklog_path = stationconfig.tracklog_path ?? ""
-station_currentshow_path = stationconfig.currentshow_path ?? ""
-%include "encoding_formats.liq"
-station_output_encoding = list.assoc(default=%mp3, stationconfig.output_encoding ?? "mp3_128", encoding_formats)
-station_host = stationconfig.host ?? "localhost"
-station_port = stationconfig.port ?? 8000
-station_mount = stationconfig.mount ?? "radio.mp3"
-station_genre = stationconfig.genre ?? ""
-station_url = stationconfig.url ?? ""
-station_playlists_root = ref (stationconfig.playlists_root ?? "") # FIX: better way than using ref?
-station_showconfig_path = stationconfig.showconfig_path ?? ""
-station_showschedule_path = stationconfig.showschedule_path ?? ""
-station_icecast_password = stationconfig.icecast_password ?? ""
+station_tts_server_endpoint = stationconfig.tts_server_endpoint ?? "http://host.docker.internal:3000/say"
+
+station_log_path = stationconfig.log_path ?? "logs/StationManager2.log"
+station_tracklog_path = stationconfig.tracklog_path ?? "logs/recent_tracks.log"
+station_currentshow_path = stationconfig.currentshow_path ?? "logs/current_show.log"
+
 station_telnet_server = stationconfig.telnet_server ?? false
 station_telnet_server_port = stationconfig.telnet_server_port ?? 1234
 station_telnet_server_timeout = float_of_int(stationconfig.telnet_server_timeout ?? 60)
 station_telnet_server_netmask = stationconfig.telnet_server_netmask ?? "0.0.0.0"
-station_announcements_path = stationconfig.announcements_path ?? ""
-station_tts_announcements_path = stationconfig.tts_announcements_path ?? ""
+
+station_announcements_path = stationconfig.announcements_path ?? "announcements/"
+station_tts_announcements_path = stationconfig.tts_announcements_path ?? "TTS_server/tmp/"
 
 # Logs setup
-settings.log.file.path.set(station_log_path)
+if (station_log_path != "") then
+    settings.log.file.path.set(station_log_path)
+end
 
 # Server setup
 if (station_telnet_server) then
@@ -183,14 +196,15 @@ broadcast_source.on_wake_up(dynsource_handle_wake_up)
 # Create final broadcast output to public icecast
 output.icecast(
     id="broadcast_output",
-    station_output_encoding,
-    host = station_host, port = station_port,
+    station_icecast_encoding,
+    host = station_icecast_host,
+    port = station_icecast_port,
     password = station_icecast_password,
-    mount = station_mount,
-    name = station_name,
-    description = station_description,
-    genre = station_genre,
-    url = station_url,
+    mount = station_icecast_mount,
+    name = station_icecast_name,
+    description = station_icecast_description,
+    genre = station_icecast_genre,
+    url = station_icecast_url,
     mksafe(broadcast_source))
     
 
@@ -211,24 +225,26 @@ def addtotracklog(nexttrack) =
 end
 
 def logtrack(metadata) =
-    # TODO don't log if the info is blank or "-" or whatever at show changes
-    artist = metadata["artist"]
-    album = metadata["album"]
-    title = metadata["title"]
-    newline="#{artist} - #{album} - #{title}"
-    recent_tracks := list.add(newline, recent_tracks())
-    if (list.length(recent_tracks()) > 20) then
-        recent_tracks := list.rev(list.tl(list.rev(recent_tracks())))
-    end
-    new_tracklog := ""
-    list.iter(addtotracklog, recent_tracks())
-    ignore(
-        file.write(
-            data=new_tracklog(),
-            append=false,
-            station_tracklog_path
+    # TODO (maybe, if still relevant) don't log if the info is blank or "-" or whatever at show changes
+    if (station_tracklog_path != "") then
+        artist = metadata["artist"]
+        album = metadata["album"]
+        title = metadata["title"]
+        newline="#{artist} - #{album} - #{title}"
+        recent_tracks := list.add(newline, recent_tracks())
+        if (list.length(recent_tracks()) > 20) then
+            recent_tracks := list.rev(list.tl(list.rev(recent_tracks())))
+        end
+        new_tracklog := ""
+        list.iter(addtotracklog, recent_tracks())
+        ignore(
+            file.write(
+                data=new_tracklog(),
+                append=false,
+                station_tracklog_path
+            )
         )
-    )
+    end
 end
 
 

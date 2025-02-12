@@ -2,11 +2,11 @@
 
 ## Introduction
 
-**Station Manager 2** is a system using Liquidsoap and Icecast that makes it easy to set up and operate fully automated netradio stations. Shows may be defined by folders of audio files to be used as playlists, with shows scheduled to play at different times of day across the week.
+**Station Manager 2** is a system using [Liquidsoap](https://www.liquidsoap.info/) and [Icecast](https://icecast.org/) that makes it easy to set up and operate fully automated netradio stations. Shows may be defined by folders of audio files to be used as playlists, with shows scheduled to play at different times of day across the week.
 
 The main logic of Station Manager 2 is the `StationManager2.liq` Liquidsoap script file, which runs your playlist-based shows and expects to be able to output to an Icecast server for broadcast.
 
-The included `docker-compose.yml` makes it easy to start up an example station using dockerized Liquidsoap and Icecast with any additional installation (as long as you have Docker). It makes use of the included example json configuration files, and example `icecast.xml`  including Icecast broadcast, which can then be modified to suit. Docker-based operation is recommended, but Station Manager 2 can also be configured for use with locally-installed Liquidsoap and Icecast.
+The included `docker-compose.yml` makes it easy to start up an example station using dockerized Liquidsoap and Icecast with any additional installation (as long as you have [Docker](https://www.docker.com/)). It makes use of the included example json configuration files, and example `icecast.xml`  including Icecast broadcast, which can then be modified to suit. Docker-based operation is recommended, but Station Manager 2 can also be configured for use with locally-installed Liquidsoap and Icecast.
 
 The included Text-To-Speech `TTS_server.rb` script can also be optionally used to enable automated voice synthesis for your station's DJ. This script must be run separately from the core docker compose setup.
 
@@ -107,9 +107,9 @@ Each show schedule entry is itself a dictionary with the following keys:
 | Key | Type | Default | Description
 | :--- | :---: | :---: | :------------------------
 | type        | String | `everyday` | Type of schedule this schedule entry. Currentl options are `everyday` (`days` key not used) and `daysofweek` (`days` key required)
-| days        | Arra of Strings | REQUIRED (for `daysofweek`) | For `type` of `daysofweek`, the days of the week on which this show schedule entry applies, eg. `["Monday", "Wednesday", "Friday"]`
-| show_hours  | Array of Numbers | REQUIRED | The hours of the day at which shows should change, eg. `[6, 12, 20]` would indicate that there should be a show change at 6am, noon, and 8pm. If `0` isn't specified, whatever show was playing at the end of the previous day will continue playing until the first indicated time.
-| show_names  | Array of Strings | REQUIRED | The names of the shows (by their key name in the show config) that should start at the times indicated in `show_hours`. **This array must be of the same length as `show_hours`**, with each time corresponding to each show name here.
+| days        | Arra of Strings | **REQUIRED** (for `daysofweek`) | For `type` of `daysofweek`, the days of the week on which this show schedule entry applies, eg. `["Monday", "Wednesday", "Friday"]`
+| show_hours  | Array of Numbers | **REQUIRED** | The hours of the day at which shows should change, eg. `[6, 12, 20]` would indicate that there should be a show change at 6am, noon, and 8pm. If `0` isn't specified, whatever show was playing at the end of the previous day will continue playing until the first indicated time.
+| show_names  | Array of Strings | **REQUIRED** | The names of the shows (by their key name in the show config) that should start at the times indicated in `show_hours`. **This array must be of the same length as `show_hours`**, with each time corresponding to each show name here.
 
 
 ## Configuring Icecast for Broadcast
@@ -124,7 +124,9 @@ For other options, see the [documentation for Icecast](https://icecast.org/docs/
 
 ## Configuring the TTS Server (optional)
 
-The TTS_server Ruby script gives your DJs an automatic voice, speaking various bits of text in a voice you choose. Currently it only runs on a MacOS host, using the Mac's built-in "say" command, but will be expanded for other Text-To-Speech options.
+The TTS_server Ruby script gives your DJs an automatic voice, speaking various bits of text in a voice you choose. Currently it only runs on a MacOS host, using the Mac's built-in "say" command.
+
+However, it should be easy to modify the script to add your own hanlder to the script for whatever TTS utility and host OS is most convenient for you. Essentially the script takes a request for speech from Station Manager and it must generate an audio file that it provides the path for back to Station Manager to play.
 
 More documentation can be found in the `TTS_server` folder, but here are the basics:
 

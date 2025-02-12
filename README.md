@@ -60,10 +60,10 @@ The station config is a JSON dictionary with the following possible keys. Keys w
 | icecast_url             | String | (empty) | Station URL used in Icecast metadata. This may not end in the icecast_mount defined below if Icecast has been configured with an alias to the mount
 | icecast_mount          | String | `radio.mp3` | Where the broadcast stream will be mounted at the Icecast host
 | icecast_encoding        | String | `mp3_128k` | Audio format to use for Icecast broadcast to users. Must be one of: `mp3_320k`, `mp3_256k`, `mp3_192k`, `mp3_160k`, `mp3_128k`, `mp3_64k`, `vorbis_q3` (quality 3), `vorbis_q6` (quality 6)
-| icecast_password       | String | REQUIRED | Password Icecast requires for input audio
+| icecast_password       | String | **REQUIRED** | Password Icecast requires for input audio
 | icecast_host           | String | `localhost` | Where station manager can find the Icecast host. If running dockerized, this will often be the mount name applied to the Icecast container
 | icecast_port           | Number | 8000 | Port where Icecast communicates
-| id_announcement        | String | (empty) | Text, or path to audio file, used for hourly station IDs
+| id_announcement        | String | (empty) | Text, or path to audio file within the station's `announcements_path`, used for hourly station IDs
 | voice_type             | String | (empty) | The TTS handler used for announcements. If the voice_type is unsupported, announcements must be paths to prerecorded audio files rather than text to speak. Currently only `tts_server_macos` is supported, using the TTS_server script (see below)
 | default_voice          | String | (empty) | Voice to specify to TTS handler, if the show has not specified one
 | tts_server_endpoint    | String | `http://host.docker.internal:3000/say` | URL where you have configured the TTS_server script to listen, if a TTS handler has been specified for the voice_type
@@ -81,22 +81,45 @@ The station config is a JSON dictionary with the following possible keys. Keys w
 
 ### Show Config
 
-The show config is a JSON dictionary containing a list of dictionary keys for each show. Each show in turn is defined by this list of keys:
+The show config is a JSON dictionary containing a list of dictionary keys for each show.
 
-...
+Create a dictionary for each show and name it with the key you will use to refer to each show in the show schedule (for example `Hiphop`).
+
+Each show dictionary in turn is defined by this list of keys. Keys with default values may be omitted, but keys that are REQUIRED must be specified in the file to successfully create a show.
+
+| Key | Type | Default | Description
+| :--- | :---: | :---: | :------------------------
+| playlist_path         | String | **REQUIRED** | Path to this show's folder of music within the `playlist_root` in the station config
+| show_longname         | String | (empty) | Currently only used when writing out a log to the `currentshow_path`
+| show_description      | String | (empty) | Currently not used
+| DJ_voice              | String | (empty) | TTS voice to use for announcements during this show. If empty, the station's `default_voice` will be used
+| signon_announcement   | String | (empty) | Voiceover text to speak when the show begins, or path to audio within the station's `announcements_path`
+| signoff_announcement  | String | (empty) | Voiceover text to speak just before the show ends, or path to audio within the station's `announcements_path`
+| shuffle_mode          | String | `songs` | Method of shuffling songs within the playlist folder (currently only `songs` is supported)
+
 
 ### Show Schedule
 
 The show schedule is a JSON array of show schedule entries. Each entry is a definition of a 24-hour day of programming, and can specify how that day is filled with shows, and when this particular profile of programming day is used (for example "on Mondays, Wednesdays, and Fridays").
 
-Each show schedule entry is a dictionary with the following keys:
+Each show schedule entry is itself a dictionary with the following keys:
 
-...
+| Key | Type | Default | Description
+| :--- | :---: | :---: | :------------------------
+| type        | String | `everyday` | Type of schedule this schedule entry. Currentl options are `everyday` (`days` key not used) and `daysofweek` (`days` key required)
+| days        | Arra of Strings | REQUIRED (for `daysofweek`) | For `type` of `daysofweek`, the days of the week on which this show schedule entry applies, eg. `["Monday", "Wednesday", "Friday"]`
+| show_hours  | Array of Numbers | REQUIRED | The hours of the day at which shows should change, eg. `[6, 12, 20]` would indicate that there should be a show change at 6am, noon, and 8pm. If `0` isn't specified, whatever show was playing at the end of the previous day will continue playing until the first indicated time.
+| show_names  | Array of Strings | REQUIRED | The names of the shows (by their key name in the show config) that should start at the times indicated in `show_hours`. **This array must be of the same length as `show_hours`**, with each time corresponding to each show name here.
 
 
 ## Configuring Icecast for Broadcast
 
-...
+The Station Manager script expects to stream audio to an Icecast server for broadcast. The Icecast server needs to be configured to match the icecast parameters defined above, including password and port of the listen-socket. Generally an fairly standard `icecast.xml` configuration file can be used. An example is provided that works with the included `docker-compose.yml` setup and may serve as a good basis for modification.
+
+Of note, you can broadcast multilpe Station Manager netradio stations through your single Icecast server, as long as they each have their own `icecast_mount` (as specified in the station config).
+
+For other options, see the [documentation for Icecast](https://icecast.org/docs/).
+
 
 
 ## Configuring the TTS Server (optional)

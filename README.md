@@ -11,7 +11,7 @@ The included `docker-compose.yml` makes it easy to start up an example station u
 The included Text-To-Speech `TTS_server.rb` script can also be optionally used to enable automated voice synthesis for your station's DJ. This script must be run separately from the core docker compose setup.
 
 > [!NOTE]
-> Station Manager 2 is currently designed to work with Liquidsoap v2.3.0 and Icecast v2.4.4
+> Station Manager 2 is currently designed to work with **Liquidsoap v2.3.0** and **Icecast v2.4.4**
 
 
 

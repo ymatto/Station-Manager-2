@@ -124,9 +124,12 @@ For other options, see the [documentation for Icecast](https://icecast.org/docs/
 
 ## Configuring the TTS Server (optional)
 
-The TTS_server Ruby script gives your DJs an automatic voice, speaking various bits of text in a voice you choose. Currently it only runs on a MacOS host, using the Mac's built-in "say" command.
+The TTS_server Ruby script gives your DJs an automatic voice, speaking various bits of text in a voice you choose.
 
-However, it should be easy to modify the script to add your own hanlder to the script for whatever TTS utility and host OS is most convenient for you. Essentially the script takes a request for speech from Station Manager and it must generate an audio file that it provides the path for back to Station Manager to play.
+Currently it only runs on a MacOS host, using the Mac's built-in "say" command. However, it should be easy to modify the script to add your own hanlder to the script for whatever TTS utility and host OS is most convenient for you. Essentially the script takes a request for speech from Station Manager and it must generate an audio file that it provides the path for back to Station Manager to play.
+
+> [!NOTE]
+> Use of the TTS_server is not required to use Station Manager. You can skip voice announcements altogether, or you can pre-record announcements however you wish and directly configure those files to be played in your station and show configs.
 
 More documentation can be found in the `TTS_server` folder, but here are the basics:
 

@@ -2,13 +2,17 @@
 
 ## Introduction
 
-**Station Manager 2** is a system using Liquidsoap and Icecast that makes it easy to set up and operate fully automated netradio stations. Shows may be defined by folders of audio files, with shows scheduled to play at different times of day across the week.
+**Station Manager 2** is a system using Liquidsoap and Icecast that makes it easy to set up and operate fully automated netradio stations. Shows may be defined by folders of audio files to be used as playlists, with shows scheduled to play at different times of day across the week.
 
-The main logic of Station Manager 2 is the `StationManager2.liq` Liquidsoap script file, which expects to be able to broadcast via an Icecast server.
+The main logic of Station Manager 2 is the `StationManager2.liq` Liquidsoap script file, which runs your playlist-based shows and expects to be able to output to an Icecast server for broadcast.
 
-The included `docker-compose.yml` and example json configuration files make it easy to start up an example station, including Icecast broadcast, which can then be modified to suit.
+The included `docker-compose.yml` makes it easy to start up an example station using dockerized Liquidsoap and Icecast. It makes use of the included example json configuration files, and example `icecast.xml`  including Icecast broadcast, which can then be modified to suit. Docker-based operation is recommended, but Station Manager 2 can also be configured for use with locally-installed Liquidsoap and Icecast.
 
 The included Text-To-Speech `TTS_server.rb` script can also be optionally used to enable automated voice synthesis for your station's DJ. This script must be run separately from the core docker compose setup.
+
+> [!NOTE]
+> Station Manager 2 is currently designed to work with Liquidsoap v2.3.0 and Icecast v2.4.4
+
 
 
 ## Running Station Manager 2

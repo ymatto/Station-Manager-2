@@ -52,7 +52,7 @@ station_telnet_server_timeout = float_of_int(stationconfig.telnet_server_timeout
 station_telnet_server_netmask = stationconfig.telnet_server_netmask ?? "0.0.0.0"
 
 station_announcements_path = stationconfig.announcements_path ?? "announcements/"
-station_tts_announcements_path = stationconfig.tts_announcements_path ?? "TTS_server/tmp/"
+station_tts_announcements_path = stationconfig.tts_announcements_path ?? "/tmp/"
 
 # Logs setup
 if (station_log_path != "") then

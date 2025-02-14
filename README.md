@@ -75,7 +75,7 @@ The station config is a JSON dictionary with the following possible keys. Keys w
 | telnet_server_timeout  | Number | 60 | Seconds that an inactive telnet connection remains alive. Set to a negative number to keep it open indefinitely
 | telnet_server_netmask  | String | "0.0.0.0" | Netmask for allowed telnet server connections
 | announcements_path     | String | `announcements/` | Path to folder containing pre-recorded announcement audio files that may be referenced by filename
-| tts_announcements_path | String | `TTS_server/tmp/` | Path to folder where the TTS_server script is configured to write out audio files for use
+| tts_announcements_path | String | `/tmp/` | Path to folder where the TTS_server script is configured to write out audio files for use
 
 
 
@@ -136,7 +136,7 @@ More documentation can be found in the `TTS_server` folder, but here are the bas
 TTS_server is configured via environment variables:
 - `PORT` (defaults to 3000) for the port the server will listen for requests
 - `ENDPOINT` (defaults to "/say") for the HTTP path for the endpoint for requests
-- `OUTPUT_PATH` (defaults to "tmp/") for the resulting audio file
+- `OUTPUT_PATH` (defaults to "/tmp/") for the resulting audio file
 
 Configure the Station Manager netradio station to match these paramters for TTS requests.
 

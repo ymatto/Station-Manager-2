@@ -1,0 +1,25 @@
+services:
+  icecast:
+    image: libretime/icecast:2.4.4-debian
+    ports:
+      - 8000:8000
+    volumes:
+      # If you want to use your own icecast.xml, this puts it where the docker container expects it
+      - ./icecast.xml:/etc/icecast.xml
+  sm2:
+    image: savonet/liquidsoap:v2.3.0
+    command: -v /sm2/StationManager2.liq -- stationconfig.json
+    ports:
+      - 1447:1447
+    # you'll typically want to point the working_dir at the volume you set below for the station
+    working_dir: /station
+    volumes:
+      # point this to your install of Station Manager 2
+      - ../:/sm2
+      # point this to where your station's configuration can be found - usually where you're running the docker up
+      - ./:/station
+      # shared tmp for things like TTS files
+      - /tmp/:/tmp
+    environment:
+      - "Etc/UTC"
+    restart: unless-stopped

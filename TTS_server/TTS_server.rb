@@ -40,7 +40,7 @@ end
 ##
 port = ENV['PORT'] || 3000
 endpoint = ENV['ENDPOINT'] || "/say"
-output_path = ENV['OUTPUT_PATH'] || "tmp/"
+output_path = ENV['OUTPUT_PATH'] || "/tmp/"
 server = WEBrick::HTTPServer.new :Port => port
 trap 'INT' do server.shutdown end
 

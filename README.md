@@ -6,8 +6,6 @@
 
 The main logic of Station Manager 2 is the `StationManager2.liq` Liquidsoap script file, which runs your playlist-based shows and expects to be able to output to an Icecast server for broadcast.
 
-The included `docker-compose.yml` makes it easy to start up an example station using dockerized Liquidsoap and Icecast with any additional installation (as long as you have [Docker](https://www.docker.com/)). It makes use of the included example json configuration files, and example `icecast.xml`  including Icecast broadcast, which can then be modified to suit. Docker-based operation is recommended, but Station Manager 2 can also be configured for use with locally-installed Liquidsoap and Icecast.
-
 The included Text-To-Speech `TTS_server.rb` script can also be optionally used to enable automated voice synthesis for your station's DJ. This script must be run separately from the core docker compose setup.
 
 > [!NOTE]
@@ -15,18 +13,28 @@ The included Text-To-Speech `TTS_server.rb` script can also be optionally used t
 
 
 
-## Running Station Manager 2
+## Running a Station Manager 2 Netradio Station
 
-Using the main `docker-compose.yml` and Station Manager 2 config to run in the background:
+While Station Manager can be configured for use with locally-installed Liquidsoap and Icecast, the easiest and best way to use Station Manager is with Docker so it can rely on known-good and cross-platform access to Liquidsoap and Icecast.
+
+To create a station in Station Manager 2, you will put all of your configuration folders in their own folder along with a docker compose file that will handle the rest. This repo includes an `example/` folder containing a simple and fully-configured example netradio station that you can start up with a single docker command.
+
+In `example/`, you'll find a `docker-compose.yml` that includes the right Liquidsoap and Icecast docker containers, configures shared ports for Icecast broadcast and Station Manager's telenet server, and shared volumes that Station Manager will need to work.
+
+You'll also find a set of example json configuration file for Station Manager, and an example `icecast.xml` for Icecast broadcast, which can then be modified to suit.
+
+To start up a station, you'll run the docker compose **within the station's folder** (like `example/`).
+
+For normal production deployment, this command will use the default `docker-compose.yml` and run the station in the background:
 `docker compose up -d`
 
-Single-running the main `docker-compose.yml` for easy debugging:
+For debugging, this command will do a single run in the foreground:
 `docker compose up --abort-on-container-exit`
 
-Single-running with the test yml for standalone test scripts:
+Or if you want to create an alternative docker compose file for testing, you can use this:
 `docker compose -f test-docker-compose.yml up --abort-on-container-exit`
 
-To run the TTS server script with default config, run `TTS_server.rb` within its folder:
+To use the optional TTS server script with default config (which is used for voice announcements in the example staation), run `TTS_server.rb` within its folder.
 
 
 
@@ -131,16 +139,7 @@ Currently it only runs on a MacOS host, using the Mac's built-in "say" command. 
 > [!NOTE]
 > Use of the TTS_server is not required to use Station Manager. You can skip voice announcements altogether, or you can pre-record announcements however you wish and directly configure those files to be played in your station and show configs.
 
-More documentation can be found in the `TTS_server` folder, but here are the basics:
-
-TTS_server is configured via environment variables:
-- `PORT` (defaults to 3000) for the port the server will listen for requests
-- `ENDPOINT` (defaults to "/say") for the HTTP path for the endpoint for requests
-- `OUTPUT_PATH` (defaults to "/tmp/") for the resulting audio file
-
-Configure the Station Manager netradio station to match these paramters for TTS requests.
-
-If using TTS_server with a client calling from docker, make sure the OUTPUT_PATH is visible to the docker environment, and the path configured for the station is the docker-local path. For example, if a docker container maps the host's `~/stationmanager2` folder to `/sm2` within docker, TTS_server might use the default `tmp/` for `OUTPUT_PATH` (which might put it at `~/stationmanager2/TTS_server/tmp/`), but stationmanager's `tts_announcements_path` might need to be `/sm2/TTS_server/tmp/`.
+More documentation, including configuration, can be found in the `TTS_server` folder. You can use environment variables to configure the TTS server, although in most cases defaults can be used.
 
 
 

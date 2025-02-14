@@ -21,4 +21,4 @@ The values are fed to a supported TTS tool, and a complete path to the resulting
 Use environment variables to set:
   PORT (defaults to 3000) for the port the server will listen for requests
   ENDPOINT (defaults to "/say") for the HTTP path for the endpoint for requests
-  OUTPUT_PATH (defaults to "tmp/") for the resulting audio file
+  OUTPUT_PATH (defaults to "/tmp/") for the resulting audio file

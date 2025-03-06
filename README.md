@@ -142,6 +142,21 @@ Currently it only runs on a MacOS host, using the Mac's built-in "say" command. 
 More documentation, including configuration, can be found in the `TTS_server` folder. You can use environment variables to configure the TTS server, although in most cases defaults can be used.
 
 
+## Using Station Manager's Telnet Server
+
+Station Manager uses Liquidsoap's built-in telnet server capability, with paramters configured in your station config, as described above.
+
+To connect, telnet to your server (typically `localhost`) using the port you've configured (or the default of `1234`). Type `help` to see the commands that can be sent. Liquidsoap automatically offers a number of built-in commands, in particular for the various internally-used "sources".
+
+Station Manager, however, adds its own set of special commands that expose **manual DJ control functions** for the running station, such as skipping tracks or telling your DJ to say things on-air using your configured TTS.
+
+You can run DJ commands in two ways:
+
+- `dj.now` takes a command argument and executes it immediately, or with a delay in seconds
+- `dj.trackend` takes a command argument and executes it at the end of the currently-playing track
+
+Type `help dj.now` or `help dj.trackend` for full syntax and list of currently available commands.
+
 
 
 ## Roadmap

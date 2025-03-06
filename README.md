@@ -38,7 +38,7 @@ The included Text-To-Speech `TTS_server.rb` script can also be optionally used t
 
 **That's it - you're up and running!**
 
-To listen, using the default example configuration, point your netradio player at [http://localhost:8000/sm2_test] and you'll hear some example tunes playing (courtesy of the awesome dudes at the creative commons-licensed [Dusted Wax Kingdom](https://dustedwax.org/) label).
+To listen, using the default example configuration, point your netradio player at [http://localhost:8000/sm2_test](http://localhost:8000/sm2_test) and you'll hear some example tunes playing (courtesy of the awesome dudes at the creative commons-licensed [Dusted Wax Kingdom](https://dustedwax.org/) label).
 
 Keep reading to learn how to configure your own netradio station from scratch.
 

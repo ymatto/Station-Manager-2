@@ -2,9 +2,9 @@
 
 ## Introduction
 
-**Station Manager 2** is a system using [Liquidsoap](https://www.liquidsoap.info/) and [Icecast](https://icecast.org/) that makes it easy to set up and operate fully automated netradio stations. Shows may be defined by folders of audio files to be used as playlists, with shows scheduled to play at different times of day across the week.
+**Station Manager 2** is a system using [Liquidsoap](https://www.liquidsoap.info/) and [Icecast](https://icecast.org/) that makes it easy to set up and operate fully automated netradio stations. Like a traditional radio station, your netradio station can include multiple "shows", which play different tracks out of folders of music you provide. Shows can be scheduled to play at different times of day, across the week. An automated DJ reads your show schedule and handles the details for you, including spoken announcements if you want. Or you can tell the DJ what to do manually via telnet server.
 
-The main logic of Station Manager 2 is the `StationManager2.liq` Liquidsoap script file, which runs your playlist-based shows and expects to be able to output to an Icecast server for broadcast.
+The main logic of Station Manager 2 is the `StationManager2.liq` Liquidsoap script file, which runs your playlist-based shows and expects to output to an Icecast server for broadcast to the world.
 
 The included Text-To-Speech `TTS_server.rb` script can also be optionally used to enable automated voice synthesis for your station's DJ. This script must be run separately from the core docker compose setup.
 
@@ -36,6 +36,9 @@ Or if you want to create an alternative docker compose file for testing, you can
 
 To use the optional TTS server script with default config (which is used for voice announcements in the example staation), run `TTS_server.rb` within its folder.
 
+That's it - you're up and running!
+
+Keep reading to learn how to configure your own netradio station from scratch.
 
 
 ## Configuring Your Netradio Station

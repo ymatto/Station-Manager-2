@@ -49,6 +49,7 @@ Below is an unsorted, unfiltered, mostly-for-my-benefit listing of possible addi
 - Ability to have station ID include show like "You're listening to the Night Show on Big Radio."
 - Other TTS utilities for TTS_server to call
   - ... there don't seem to be any standards, and options seem very OS-linked...
+- Option to automatically pre-generate static announcements from config rather than live each time?
 
 ### Code and station quality
 - Make sure playlists get reshuffled so that we don’t get the same sequences playing (especially for playlists around 24h long)

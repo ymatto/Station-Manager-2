@@ -156,9 +156,3 @@ You can run DJ commands in two ways:
 - `dj.trackend` takes a command argument and executes it at the end of the currently-playing track
 
 Type `help dj.now` or `help dj.trackend` for full syntax and list of currently available commands.
-
-
-
-## Roadmap
-
-...

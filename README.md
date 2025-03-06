@@ -6,7 +6,7 @@
 
 The main logic of Station Manager 2 is the `StationManager2.liq` Liquidsoap script file, which runs your playlist-based shows and expects to output to an Icecast server for broadcast to the world.
 
-The included Text-To-Speech `TTS_server.rb` script can also be optionally used to enable automated voice synthesis for your station's DJ. This script must be run separately from the core docker compose setup.
+
 
 > [!NOTE]
 > Station Manager 2 is currently designed to work with **Liquidsoap v2.3.0** and **Icecast v2.4.4**
@@ -34,9 +34,11 @@ For debugging, this command will do a single run in the foreground:
 Or if you want to create an alternative docker compose file for testing, you can use this:
 `docker compose -f test-docker-compose.yml up --abort-on-container-exit`
 
-To use the optional TTS server script with default config (which is used for voice announcements in the example staation), run `TTS_server.rb` within its folder.
+The included Text-To-Speech `TTS_server.rb` script can also be optionally used to enable automated voice synthesis for your station's DJ. This script must be run separately from the core docker compose setup. To use the default config (which is used for voice announcements in the example staation), run `TTS_server.rb` within its folder.
 
-That's it - you're up and running!
+**That's it - you're up and running!**
+
+To listen, using the default example configuration, point your netradio player at [http://localhost:8000/sm2_test] and you'll hear some example tunes playing (courtesy of the aweosme dudes at the creative commons-licensed [Dusted Wax Kingdom](https://dustedwax.org/) label).
 
 Keep reading to learn how to configure your own netradio station from scratch.
 

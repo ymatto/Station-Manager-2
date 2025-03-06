@@ -40,6 +40,8 @@ The included Text-To-Speech `TTS_server.rb` script can also be optionally used t
 
 To listen, using the default example configuration, point your netradio player at [http://localhost:8000/sm2_test](http://localhost:8000/sm2_test) and you'll hear some example tunes playing (courtesy of the awesome dudes at the creative commons-licensed [Dusted Wax Kingdom](https://dustedwax.org/) label).
 
+Or you can pull up the Icecast broadcast status page at [http://localhost:8000/status](http://localhost:8000/status) to see stats, get playlist links, etc.
+
 Keep reading to learn how to configure your own netradio station from scratch.
 
 

@@ -17,7 +17,9 @@ Below is an unsorted, unfiltered, mostly-for-my-benefit listing of possible addi
 - Check if there are any settings for the randomness applied to playlist playback
 - Implement other schedule day types
   - "day-of-year?" for holidays and other special programming?
-- Allow definition of station to have special directories: 4/5-stars, new music, etc
+- Allow shows to ensure certain classes of songs play within in an hour
+  - Things like "new music" or "5-star tracks" that you want to play with special frequency
+  - Use folders for different sub-sortings but associated to one show?
   - Flags for how specials get mixed in... one-by-one periodically? Special new music hours?
   - Requires running a show based on a queue rather than a playlist???
 - Add configurable live input using a harbor

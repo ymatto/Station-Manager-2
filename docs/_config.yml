@@ -29,7 +29,7 @@ twitter_username: matthew_hine
 github_username:  ymatto
 
 # Build settings
-theme: minima
+remote_theme: pages-themes/slate@v0.2.0
 plugins:
   - jekyll-feed
 

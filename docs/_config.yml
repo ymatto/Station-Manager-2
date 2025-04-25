@@ -23,15 +23,15 @@ email: stationmanager@hine.org
 description: >- # this means to ignore newlines until "baseurl:"
   Station Manager 2 is a system using Liquidsoap and Icecast that makes it
   easy to set up and operate fully automated netradio stations.
-baseurl: "" # the subpath of your site, e.g. /blog
-url: "https://stationmanager.tech" # the base hostname & protocol for your site, e.g. http://example.com
+baseurl: "/Station-Manager-2/" # the subpath of your site, e.g. /blog
+url: "https://ymatt.github.io" # the base hostname & protocol for your site, e.g. http://example.com
 twitter_username: matthew_hine
 github_username:  ymatto
 
 # Build settings
 theme: jekyll-theme-slate
-plugins:
-  - jekyll-remote-theme
+# plugins:
+#   - jekyll-feed
 
 # Exclude from processing.
 # The following items will not be processed, by default.

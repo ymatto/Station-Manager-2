@@ -26,6 +26,7 @@ baseurl: "" # the subpath of your site, e.g. /blog
 url: "https://stationmanager.tech" # the base hostname & protocol for your site, e.g. http://example.com
 twitter_username: matthew_hine
 github_username:  ymatto
+show_downloads: true
 
 # Build settings
 theme: jekyll-theme-modernist

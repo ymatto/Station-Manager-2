@@ -1,5 +1,8 @@
 # Station Manager 2
 
+**For documentation on configuration and usage**, [see the wiki right here on GitHub](https://github.com/ymatto/Station-Manager-2/wiki).
+You can find the Station Manager homepage at [stationmanager.tech](https://stationmanager.tech)
+
 ## Introduction
 
 **Station Manager 2** is a system using [Liquidsoap](https://www.liquidsoap.info/) and [Icecast](https://icecast.org/) that makes it easy to set up and operate fully automated netradio stations. Like a traditional radio station, your netradio station can include multiple "shows", which play different tracks out of folders of music you provide. Shows can be scheduled to play at different times of day, across the week. An automated DJ reads your show schedule and handles the details for you, including spoken announcements if you want. Or you can tell the DJ what to do manually via telnet server.
@@ -10,7 +13,6 @@ Station Manager 2 works best when run using dockerized Liquidsoap and Icecast, a
 
 Also included is a simple TTS_server script that enables use of Text-To-Speech for automated on-air announcements.
 
-For documentation on configuration and usage, see the wiki right here on GitHub.
 
 ## Wait, but...
 

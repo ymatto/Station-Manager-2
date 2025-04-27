@@ -1,6 +1,7 @@
 # Station Manager 2
 
 **For documentation on configuration and usage**, [see the wiki right here on GitHub](https://github.com/ymatto/Station-Manager-2/wiki).
+
 You can find the Station Manager homepage at [stationmanager.tech](https://stationmanager.tech)
 
 ## Introduction
@@ -9,7 +10,7 @@ You can find the Station Manager homepage at [stationmanager.tech](https://stati
 
 The main logic of Station Manager 2 is the `StationManager2.liq` Liquidsoap script file, which runs your playlist-based shows and expects to output to an Icecast server for broadcast to the world.
 
-Station Manager 2 works best when run using dockerized Liquidsoap and Icecast, although it is not required.
+Station Manager 2 works best when run using dockerized Liquidsoap and Icecast, although it is not required. If you have Liquidsoap installed natively on your host, you can run the script directly with your configuration file.
 
 Also included is a simple TTS_server script that enables use of Text-To-Speech for automated on-air announcements.
 

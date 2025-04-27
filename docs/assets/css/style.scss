@@ -5,7 +5,7 @@
 
     html {
         background:#666;
-        background: #555 linear-gradient(#666, #444) fixed;
+        background: #444 linear-gradient(#666, #444) fixed;
         height: 100%;
       }
       
@@ -13,7 +13,7 @@
         padding:50px 0;
         margin:0;
         font:14px/1.5 Lato, "Helvetica Neue", Helvetica, Arial, sans-serif;
-        color:#555;
+        color:#444;
         font-weight:300;
         background:url('../images/checker.png') fixed;
         min-height: calc(100% - 100px);
@@ -22,7 +22,7 @@
       .wrapper {
         width:740px;
         margin:0 auto;
-        background:#DEDEDE;
+        background:#666;
         border-radius: 20px;
         box-shadow: rgba(#000, 0.2) 0 0 0 1px, rgba(#000, 0.45) 0 3px 10px;
       }

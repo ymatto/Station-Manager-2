@@ -33,8 +33,6 @@ Ready to take charge, Andy Travis?
 
 ### Who is this doing this synthetic type of *alpha beta psychedelic funkin'*?
 
-SM2 is [something I do](https://www.hine.org) in my free time for fun, and thought others might enjoy using it too. 
-
-Good ole fashioned FM-style netradio, playing music hand-curated by lovers of music, can offer some things that algorithmic Spotify feeds can't.
+SM2 is [something I do](https://www.hine.org) in my free time for fun, and thought others might enjoy using it too. Why? Good ole fashioned FM-style netradio, with playlists hand-curated by lovers of music, can offer some things that algorithmic Spotify feeds can't.
 
 SM2 is fully **free and open source** using the MIT license. Enjoy!

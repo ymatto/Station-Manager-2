@@ -4,8 +4,8 @@
 @import "{{ site.theme }}";
 
     html {
-        background:#666;
-        background: #dcc244 linear-gradient(#666, #444) fixed;
+        background:#444;
+        background: #eee linear-gradient(#666, #444) fixed;
         height: 100%;
       }
       
@@ -13,7 +13,7 @@
         padding:50px 0;
         margin:0;
         font:14px/1.5 Lato, "Helvetica Neue", Helvetica, Arial, sans-serif;
-        color:#444;
+        color:#333;
         font-weight:300;
         background:url('../images/checker.png') fixed;
         min-height: calc(100% - 100px);
@@ -166,7 +166,7 @@
         padding:15px 20px;
         font-size:15px;
         border-top:1px solid #fff;
-        background: linear-gradient(#fdfdfd, #efefef 700px);
+        background: linear-gradient(#fdfdfd, #eee 700px);
         border-radius: 0 0 20px 20px;
         position:relative;
       }

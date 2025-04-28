@@ -13,8 +13,6 @@ docker compose up -d
 
 With the basics taken care of for you, you can **customize** your netradio station by just editing a few JSON config files, and providing **your own playlists of music**.
 
-![The SM2 system](/assets/images/sm2_system.png)
-
 SM2 is fully **free and open source** using the MIT license. Enjoy!
 
 * * *
@@ -28,6 +26,8 @@ SM2 is fully **free and open source** using the MIT license. Enjoy!
 * Run multiple netradio streams simultaneously
 * Choose the bitrate of your streams
 * Telnet server to tell your DJ what to do *just like a real station manager*
+
+![The SM2 system](/assets/images/sm2_system.png)
 
 Ready to take charge, Andy Travis?
 

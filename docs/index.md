@@ -15,7 +15,7 @@ With the basics taken care of for you, you can **customize** your netradio stati
 
 * * *
 
-### Solid, what all can it do?
+### Solid. What all can it do?
 
 **SM2 lays a load of *groovy options* on you, such as:**
 * Create shows from your music playlists of MP3 and other files

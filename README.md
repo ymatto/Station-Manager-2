@@ -1,4 +1,4 @@
-# Station Manager 2
+![](https://stationmanager.tech/assets/images/station_manager_logo.png)
 
 **For documentation on configuration and usage**, [see the wiki right here on GitHub](https://github.com/ymatto/Station-Manager-2/wiki).
 

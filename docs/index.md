@@ -6,7 +6,8 @@ layout: default
 
 Station Manager 2 is a system using [Liquidsoap](https://www.liquidsoap.info/) and [Icecast](https://icecast.org/) that makes it easy to set up and operate **fully automated netradio stations**.
 
-Using Docker, deploying your first netradio station is as simple as cloning Station Manager 2 and running...
+SM2 is server software, but is designed to let you focus on your netradio station's programming, rather than lots of system setup and programming. Using Docker, deploying your first netradio station is as simple as cloning the Station Manager 2 repo and running...
+
 ```console
 docker compose up -d
 ```

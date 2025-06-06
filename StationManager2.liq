@@ -104,6 +104,7 @@ def get_show(thisshow) =
     thisshowkey = fst(thisshow) # TODO <-- AKA this_show_name, see note above
     thisshowdata = snd(thisshow)
 
+    # TODO: all these "list.append" usages can probably be list.add... we're just adding one element
     thisshowpath = thisshowdata.playlist_path # this is required - will fail if missing
     show_paths := list.append([(thisshowkey, "#{station_playlists_root()}#{thisshowpath}")], show_paths())
     thisshowlongname = thisshowdata.show_longname ?? "error" # TODO: deal with failure better

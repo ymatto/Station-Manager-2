@@ -1,0 +1,1 @@
+[{"name":"90s Jams","rules":[{"filter":"is no more than","tag":"year","value":1999},{"filter":"is no less than","tag":"year","value":1990}]},{"name":"I Love Acid","rules":[{"tag":"genre","filter":"is","value":"Acid"}]},{"name":"Last 30-day Adds","rules":[{"tag":"am_date_added","filter":"is in the last seconds","value":2592000}]}]

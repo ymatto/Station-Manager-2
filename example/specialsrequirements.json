@@ -1,0 +1,1 @@
+[{"requirements":{"per_hour_target":2,"try_top_of_hour":false,"try_show_start":true,"try_show_end":false},"special_name":"Last 30-day Adds"},{"requirements":{"per_hour_target":1,"try_top_of_hour":false,"try_show_start":false,"try_show_end":true},"special_name":"90s Jams"}]

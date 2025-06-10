@@ -468,6 +468,7 @@ def change_show(show_name) =
     
         show_path = list.assoc(default="error", show_name, show_paths())
         show_source = playlist(id="scheduled_show_playlist", show_path)
+        # TODO consider switching to on_track (rather than on_metadata), which might avoid bogus metadata... same arguments and everything, one-line change
         show_source.on_metadata(logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
         current_show_source := show_source
     

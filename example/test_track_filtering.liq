@@ -68,7 +68,7 @@ station_nonrepetition_reqs = [
 ]
 
 
-# already provided in SM2 - don't duplicate
+# NOTE already provided in SM2 - don't duplicate
 current_show_source = ref (blank())
 
 # keep track of what specials requirements are overdue

@@ -40,12 +40,12 @@ station_specials = [
 station_specials_reqs = [
     {
         special_name = "Best Of",
-        per_hour_target = 6,
+        per_hour_target = 3,
         try_top_of_hour = true
     },
     {
         special_name = "Last 30-day Adds",
-        per_hour_target = 3,
+        per_hour_target = 1,
         try_top_of_hour = false
     }
 ]
@@ -94,10 +94,10 @@ last_plays_cache = ref([])
 # UTILITY FUNCTIONS --------------------------------------
 
 
-# NOTE - This function is already in main SM2 script - don't duplicate.
-def get_time_since_last_hour()
-    sec = time.local().sec
-    min = time.local().min
+# NOTE - similar to an existing SM2 script function, but different for another purpose
+def get_time_since_last_hour_at(this_time)
+    sec = time.local(this_time).sec
+    min = time.local(this_time).min
     float_of_int(sec + (min * 60))      
 end
 
@@ -236,7 +236,7 @@ def is_request_approved(req) =
 
             # if it will be a new hour at the end of this track, clear specials tracking for last hour
             # and reset current hour so we register this track's specials toward next hour
-            time_at_track_end = time() + source.remaining(current_show_source())
+            time_at_track_end = time() + current_track_remaining
             hour_of_track_end = time.local(time_at_track_end).hour
             if specials_hour() != hour_of_track_end then
                 log("Next track will start in a new hour of specials!")
@@ -254,7 +254,7 @@ def is_request_approved(req) =
             list.iter(increment_special_req_plays, track_special_names)
             log("Latest specials plays this hour: " ^ string(specials_req_plays_this_hour()))
 
-            # update specials_req_overdue_states for time at the expected end of current track
+            # update specials_req_overdue_states **for time at the expected end of current track**
 
             def get_special_state(this_special_reqs)
 
@@ -264,11 +264,12 @@ def is_request_approved(req) =
                 this_special_overdue_state = ref(false)
                 
                 if this_try_top_of_hour and top_of_hour_play() then
-                    this_special_overdue_state = true # per_hour_target doesn't matter - top_of_hour requirement makes this special immediately overdue
+                    this_special_overdue_state := true # per_hour_target doesn't matter - top_of_hour requirement makes this special immediately overdue
                 elsif this_per_hour_target > 0 then
                     req_period = 3600.0 / float_of_int(this_per_hour_target)
-                    time_since_hour = get_time_since_last_hour()
-                    target_plays = int_of_float(floor(time_since_hour / req_period))
+                    expected_time_since_hour = get_time_since_last_hour_at(time() + current_track_remaining)
+                    target_plays = int_of_float(floor( (expected_time_since_hour + (req_period / 2.0)) / req_period ) )
+                        # for example, 3 plays per hour means that we should be adding target_play counts at 10, 30, and 50 minute marks
                     actual_plays = list.assoc(default=0, this_special_name, specials_req_plays_this_hour())
                     if target_plays > actual_plays then
                         # we're behind - make this overdue
@@ -282,9 +283,19 @@ def is_request_approved(req) =
             new_specials_overdue_states = list.map(get_special_state, station_specials_reqs)
             specials_req_overdue_states := new_specials_overdue_states
 
-            # TODO update last_played_* lists based on current_track's metadata
+            # Update last_plays_cache based on current_track's metadata
+            log("Updating last play times with: " ^ current_track_filename)
 
+            def get_updated_last_plays_for_each_required_tag_name(this_nonrepetition_req)
+                this_tag_name = this_nonrepetition_req.tag_name
+                this_last_plays = list.assoc(default=[], this_tag_name, last_plays_cache())
 
+                tag_of_current_track = list.assoc(default="", this_tag_name, current_track_metadata)
+                updated_this_last_plays = list.add((tag_of_current_track, time()), list.assoc.remove(tag_of_current_track, this_last_plays))
+                (this_tag_name, updated_this_last_plays)
+            end
+
+            last_plays_cache := list.map(get_updated_last_plays_for_each_required_tag_name, station_nonrepetition_reqs)
         end
     end
 
@@ -349,6 +360,7 @@ def is_request_approved(req) =
 
     if number_failed_request_checks() > 10 then # TODO work out the right number here.... no idea. At min need to prevent infinite loops if there is nothing.
         log("APPROVED - Too many failed expensive checks, so accepting track to move on!")
+        number_failed_request_checks := 0
         true
     else
         # Reject if this is a dumb hidden file like .DS_store

@@ -191,8 +191,8 @@ def dynsource_handle_wake_up() =
 end
 
 # add handles on status
-broadcast_source.on_shutdown(dynsource_handle_shutdown)
-broadcast_source.on_wake_up(dynsource_handle_wake_up)
+broadcast_source.on_shutdown(synchronous=true, dynsource_handle_shutdown)
+broadcast_source.on_wake_up(synchronous=true, dynsource_handle_wake_up)
 
 # Create final broadcast output to public icecast
 output.icecast(
@@ -225,12 +225,12 @@ def addtotracklog(nexttrack) =
   new_tracklog := string.concat([new_tracklog(), nexttrack, "\n"])
 end
 
-def logtrack(metadata) =
+def logtrack(this_metadata) =
     # TODO (maybe, if still relevant) don't log if the info is blank or "-" or whatever at show changes
     if (station_tracklog_path != "") then
-        artist = metadata["artist"]
-        album = metadata["album"]
-        title = metadata["title"]
+        artist = this_metadata["artist"]
+        album = this_metadata["album"]
+        title = this_metadata["title"]
         newline="#{artist} - #{album} - #{title}"
         recent_tracks := list.add(newline, recent_tracks())
         if (list.length(recent_tracks()) > 20) then
@@ -277,16 +277,16 @@ def get_current_hour() =
 end
 
 def get_time_since_midnight() =
-    sec = time.local().sec
-    min = time.local().min
-    hour = time.local().hour
-    float_of_int(sec + (min * 60 + (hour * 3600)))
+    this_sec = time.local().sec
+    this_min = time.local().min
+    this_hour = time.local().hour
+    float_of_int(this_sec + (this_min * 60 + (this_hour * 3600)))
 end
 
 def get_time_since_last_hour() =
-    sec = time.local().sec
-    min = time.local().min
-    float_of_int(sec + (min * 60))      
+    this_sec = time.local().sec
+    this_min = time.local().min
+    float_of_int(this_sec + (this_min * 60))      
 end
 
 # returns the unixtime at midnight at the start of today
@@ -438,8 +438,8 @@ def say(thing_to_say) =
             say_file_path = station_tts_announcements_path ^ data
             playover(say_file_path)
         else
-            error = data
-            log("TTS error: " ^ error)
+            tts_error = data
+            log("TTS error: " ^ tts_error)
         end  
     else
         log("Station voice_type not supported. SAY command ignored.")
@@ -455,8 +455,9 @@ end
 
 # show management functions (plus change_show queueable command)
 
-def handle_track_end(metadata) = # TODO figure out how to ignore these required handler parameters
+def handle_track_end(this_metadata) = # TODO figure out how to ignore these required handler parameters
     # TODO before totally ignoring the metadata data here... it seems to include album art? Use with webpage? If the "logtrack" stuff can't?
+    ignore(this_metadata)
     log("  - track change signal -")
     track_endtime := true # triggers the command_loop
 end
@@ -469,7 +470,7 @@ def change_show(show_name) =
         show_path = list.assoc(default="error", show_name, show_paths())
         show_source = playlist(id="scheduled_show_playlist", show_path)
         # TODO consider switching to on_track (rather than on_metadata), which might avoid bogus metadata... same arguments and everything, one-line change
-        show_source.on_metadata(logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
+        show_source.on_metadata(synchronous=false, logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
         current_show_source := show_source
     
         # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
@@ -481,17 +482,14 @@ def change_show(show_name) =
         set_fadeout_trackend("false")
 
         # Now create the new source for broadcast
-        # TODO: reintroduce use of the playover_source for voices somehow...    
-        new_output_source =
-            smooth_add(duration=1.5, p=0.1, special=playover_source,
-                normal=source.on_track(id="track_end_handler",
-                    switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
-                        switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
-                            show_source
-                        ) ] )
-                    ) ] )
-                , handle_track_end)
-            )
+        show_source_with_switches = 
+            switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
+                switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
+                    show_source
+                ) ] )
+            ) ] )
+        show_source_with_switches.on_track(synchronous=true, handle_track_end)
+        new_output_source = smooth_add(duration=1.5, p=0.1, special=playover_source, normal=show_source_with_switches)
 
         # Set the source used by the dynamic broadcast source
         current_output_source := new_output_source

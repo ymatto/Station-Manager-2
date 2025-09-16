@@ -96,9 +96,9 @@ last_plays_cache = ref([])
 
 # NOTE - similar to an existing SM2 script function, but different for another purpose
 def get_time_since_last_hour_at(this_time)
-    sec = time.local(this_time).sec
-    min = time.local(this_time).min
-    float_of_int(sec + (min * 60))      
+    this_sec = time.local(this_time).sec
+    this_min = time.local(this_time).min
+    float_of_int(this_sec + (this_min * 60))      
 end
 
 # Convert from YYYY-MM-DD format to unix timestamp float
@@ -183,7 +183,7 @@ def classify_track(this_metadata)
         if list.for_all(check_rule, this_special.rules) then
             this_special.name
         else
-            null()
+            null
         end
     end
 
@@ -212,13 +212,14 @@ number_failed_request_checks = ref(0)
 def is_request_approved(req) =
 
     # Find out what the proposed request to play next is and consider its suitability
-    request.resolve(req)
+    ignore(request.resolve(req))
     next_request_filename = request.filename(req)
     next_request_metadata = ref([]) # don't get it until we know it's a valid file
 
     def update_specials_and_last_played_state()
         # get the playing track (likely just started as the next playlist request)
-        current_track_metadata = source.last_metadata(current_show_source()) ?? []
+        # OLD: current_track_metadata = source.last_metadata(current_show_source()) ?? []
+        current_track_metadata = current_show_source().last_metadata() ?? []
         current_track_remaining = source.remaining(current_show_source())
         current_track_filename = current_track_metadata["filename"]
 
@@ -305,7 +306,7 @@ def is_request_approved(req) =
         if state then
             special_name
         else
-            null()
+            null
         end
     end
 
@@ -322,7 +323,8 @@ def is_request_approved(req) =
         tag_of_this_track = list.assoc(default="", this_tag_name, next_request_metadata())
         within_time = ref(0.0)
         if this_dont_repeat_within_last == "track" then
-            playing_track_metadata = source.last_metadata(current_show_source()) ?? []
+            # OLD: playing_track_metadata = source.last_metadata(current_show_source()) ?? []
+            playing_track_metadata = current_show_source().last_metadata() ?? []
             tag_of_playing_track = list.assoc(default="", this_tag_name, playing_track_metadata)
             if tag_of_this_track == tag_of_playing_track then
                 false

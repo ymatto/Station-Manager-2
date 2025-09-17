@@ -218,7 +218,6 @@ def is_request_approved(req) =
 
     def update_specials_and_last_played_state()
         # get the playing track (likely just started as the next playlist request)
-        # OLD: current_track_metadata = source.last_metadata(current_show_source()) ?? []
         current_track_metadata = current_show_source().last_metadata() ?? []
         current_track_remaining = source.remaining(current_show_source())
         current_track_filename = current_track_metadata["filename"]
@@ -323,7 +322,6 @@ def is_request_approved(req) =
         tag_of_this_track = list.assoc(default="", this_tag_name, next_request_metadata())
         within_time = ref(0.0)
         if this_dont_repeat_within_last == "track" then
-            # OLD: playing_track_metadata = source.last_metadata(current_show_source()) ?? []
             playing_track_metadata = current_show_source().last_metadata() ?? []
             tag_of_playing_track = list.assoc(default="", this_tag_name, playing_track_metadata)
             if tag_of_this_track == tag_of_playing_track then

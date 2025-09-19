@@ -23,7 +23,7 @@ end
 stationconfig_file = file.contents(stationconfig_filename)
 
 
-# TODO: Use proper type annotation: let json.parse (x : ...) = ...
+# TODO: Use proper type annotation once it's possible to specify defaults there. Until then, just accept the log warning.
 let json.parse stationconfig = stationconfig_file
 
 # TODO: Halt script if certain minimum things aren't set?
@@ -68,6 +68,7 @@ station_tts_announcements_path = stationconfig.tts_announcements_path ?? "/tmp/"
 if (station_log_path != "") then
     settings.log.file.path.set(station_log_path)
 end
+settings.ffmpeg.log.verbosity.set("quiet")
 
 # Server setup
 if (station_telnet_server) then
@@ -82,7 +83,7 @@ end
 
 # LOAD STATION SPECIALS
 
-log("STARTUP: loading specials...")
+log("STARTUP: Loading specials...")
 
 # This is your definition for specials to classify tracks with and filter on
 #   name is your own name for the special, to be referred to in the station_specials_reqs
@@ -94,31 +95,36 @@ log("STARTUP: loading specials...")
 #           is number no more than
 #           is string
 #           is string that includes
-#           is timestamp in the last seconds
-#           is year in the last years
-#           is date in the last days (YYYY-MM-DD format)
+#           is timestamp in the last seconds (tag must be in unix time)
+#           is year in the last years (tag must be YYYY format)
+#           is date in the last days (tag must be YYYY-MM-DD format)
 #       value is what to measure the rule against
 station_specials = ref([])
-station_specials_file = file.contents(station_specials_path)
-let json.parse ( station_specials :
-    [
-        {
-            name: string,
-            rules: [
-                {
-                    tag: string,
-                    filter: string,
-                    value: string
-                }
-            ]
-        }
-    ] ) = station_specials_file 
+if (file.exists(station_specials_path)) then
+    station_specials_file = file.contents(station_specials_path)
+    let json.parse ( new_station_specials :
+        [
+            {
+                name: string,
+                rules: [
+                    {
+                        tag: string,
+                        filter: string,
+                        value: string
+                    }
+                ]
+            }
+        ] ) = station_specials_file 
+    station_specials := new_station_specials
+else
+    log("         Skipping, no specials file found at: " ^ station_specials_path)
+end
 
 
 
 # LOAD STATION SPECIALS REQUIREMENTS
 
-log("STARTUP: loading specials requirements...")
+log("STARTUP: Loading specials requirements...")
 
 # This is your definition for when or how often specials should ideally be played
 #   special_name refers to one of the specials you defined in station_specials
@@ -126,21 +132,26 @@ log("STARTUP: loading specials requirements...")
 #   try_top_of_hour, if set, tries to play the special as the first thing after an hour switch
 # TODO ... also want to implement options for try_show_start and try_show_end
 station_specials_reqs = ref([])
-station_specials_reqs_file = file.contents(station_specials_reqs_path)
-let json.parse ( station_specials_reqs :
-    [ 
-        {
-            special_name: string,
-            per_hour_target: int,
-            try_top_of_hour: bool
-        }
-    ] ) = station_specials_reqs_file
+if (file.exists(station_specials_reqs_path)) then
+    station_specials_reqs_file = file.contents(station_specials_reqs_path)
+    let json.parse ( new_station_specials_reqs :
+        [ 
+            {
+                special_name: string,
+                per_hour_target: int,
+                try_top_of_hour: bool
+            }
+        ] ) = station_specials_reqs_file
+    station_specials_reqs := new_station_specials_reqs
+else
+    log("         Skipping, no specials requirements file found at: " ^ station_specials_reqs_path)
+end
 
 
 
 # LOAD STATION NON-REPEITITION REQUIREMENTS
 
-log("STARTUP: loading non-repetition requirements...")
+log("STARTUP: Loading non-repetition requirements...")
 
 # This is your definition for what sorts of repetitions should be disallowed
 #   tag_name sets a metadata tag to check for repetition ("filename" isn't technically an ID3 tag but can be treated like one here)
@@ -152,14 +163,19 @@ log("STARTUP: loading non-repetition requirements...")
 #       12 hours
 #       day
 station_nonrepetition_reqs = ref([])
-station_nonrepetition_reqs_file = file.contents(station_nonrepetition_reqs_path)
-let json.parse ( station_nonrepetition_reqs :
-    [
-        {
-            tag_name: string,
-            dont_repeat_within_last: string
-        }
-    ] ) = station_nonrepetition_reqs_file
+if (file.exists(station_nonrepetition_reqs_path)) then
+    station_nonrepetition_reqs_file = file.contents(station_nonrepetition_reqs_path)
+    let json.parse ( new_station_nonrepetition_reqs :
+        [
+            {
+                tag_name: string,
+                dont_repeat_within_last: string
+            }
+        ] ) = station_nonrepetition_reqs_file
+    station_nonrepetition_reqs := new_station_nonrepetition_reqs
+else
+    log("         Skipping, no specials requirements file found at: " ^ station_specials_reqs_path)
+end
 
 
 
@@ -170,7 +186,6 @@ let json.parse ( station_nonrepetition_reqs :
 log("STARTUP: loading showconfig...")
 
 # TODO: For now just pulling a list of names for the sake of the currentShow.log, need to parse the rest
-# TODO: Deal with failure-to-read better with thoughtful defaults and handling
 
 # TODO should do show_names here too, just as a convenient list of keys for the other lists
 show_paths = ref ([]) # ("Beats", "files/Instrumental Hip-Hop"), ("Groovestyle", "files/Stylish Background"), ...
@@ -234,6 +249,7 @@ showschedule_show_hours = ref ([]) # [0, 7, 16], [0, 12], ...
 
 showschedule_file = file.contents(station_showschedule_path)
 
+# no optioanl types here - all required as shown to have a valid schedule
 let json.parse (showschedule_list : [{
         type: string,
         days: [string],
@@ -430,6 +446,7 @@ pre_trackend_command_queue = ref ([]) # [([commandname, arg], exec_time_before_t
 
 # keep track of what specials requirements are overdue
 specials_req_overdue_states = ref([]) # [ ("Best Of", false), (...) ]
+overdue_special_names = ref([]) # [ "Best Of", "90s Jams", ... ]
 specials_req_plays_this_hour = ref([]) # [ ("Best Of", 3), (...) ]
 specials_hour = ref(time.local().hour)
 
@@ -527,7 +544,7 @@ def classify_track(this_metadata)
         cached_specials_matched
     else
         # iterate through station_specials to see which match this file, returning a list of matched specials
-        specials_matched = list.filter_map(check_special, station_specials)
+        specials_matched = list.filter_map(check_special, station_specials())
         # update the cache
         track_special_matches_cache := list.add((this_filename, specials_matched), track_special_matches_cache())
         # return the (now cached) results
@@ -538,7 +555,7 @@ end
 
 # Keep track of some things *between calls* to is_request_approved, so we can be smarter when churning through request rejections
 last_current_track_checked = ref("")
-number_failed_request_checks = ref(0)
+number_request_checks = ref(0)
 
 # Called as source's check_next - decide if the next request should be played or not based on specials and repetition rules
 def is_request_approved(req) =
@@ -548,6 +565,8 @@ def is_request_approved(req) =
     next_request_filename = request.filename(req)
     next_request_metadata = ref([]) # don't get it until we know it's a valid file
 
+    # big function to see what specials state we'll be in, considering the currently playing track **at the time when it finishes**
+    # intended to be called just after a track has started playing, although it does avoid redundant tallying if called more than once during a track
     def update_specials_and_last_played_state()
         # get the playing track (likely just started as the next playlist request)
         current_track_metadata = current_show_source().last_metadata() ?? []
@@ -588,6 +607,7 @@ def is_request_approved(req) =
 
             # update specials_req_overdue_states **for time at the expected end of current track**
 
+            # iterator to figure out the overdue status of a given special requirement
             def get_special_state(this_special_reqs)
 
                 this_special_name = this_special_reqs.special_name # "Best Of"
@@ -595,29 +615,33 @@ def is_request_approved(req) =
                 this_try_top_of_hour = this_special_reqs.try_top_of_hour ?? false
                 this_special_overdue_state = ref(false)
                 
+                # TODO: add more options like perhaps try_show_end, try_show_start, per_day_target, per_show_target ?
                 if this_try_top_of_hour and top_of_hour_play() then
-                    this_special_overdue_state := true # per_hour_target doesn't matter - top_of_hour requirement makes this special immediately overdue
+                    # per_hour_target doesn't matter - top_of_hour requirement makes this special immediately overdue
+                    this_special_overdue_state := true
                 elsif this_per_hour_target > 0 then
+                    # let's see about the per-hour target
                     req_period = 3600.0 / float_of_int(this_per_hour_target)
-                    expected_time_since_hour = get_time_since_last_hour_at(time() + current_track_remaining)
+                    expected_time_since_hour = get_time_since_last_hour_at(time() + current_track_remaining) # at end of current track
                     target_plays = int_of_float(floor( (expected_time_since_hour + (req_period / 2.0)) / req_period ) )
-                        # for example, 3 plays per hour means that we should be adding target_play counts at 10, 30, and 50 minute marks
+                        # important math... for example:
+                        # 1 play per hour adds target_play increment at 30 minute mark
+                        # 3 plays per hour adds target_play increments at 10, 30, and 50 minute marks
                     actual_plays = list.assoc(default=0, this_special_name, specials_req_plays_this_hour())
                     if target_plays > actual_plays then
                         # we're behind - make this overdue
                         this_special_overdue_state := true
                     end
-                end
+                end 
 
                 (this_special_name, this_special_overdue_state())
             end
 
-            new_specials_overdue_states = list.map(get_special_state, station_specials_reqs)
+            new_specials_overdue_states = list.map(get_special_state, station_specials_reqs())
             specials_req_overdue_states := new_specials_overdue_states
 
             # Update last_plays_cache based on current_track's metadata
-            log("Updating last play times with: " ^ current_track_filename)
-
+            # log("Updating last play times with: " ^ current_track_filename)
             def get_updated_last_plays_for_each_required_tag_name(this_nonrepetition_req)
                 this_tag_name = this_nonrepetition_req.tag_name
                 this_last_plays = list.assoc(default=[], this_tag_name, last_plays_cache())
@@ -627,7 +651,7 @@ def is_request_approved(req) =
                 (this_tag_name, updated_this_last_plays)
             end
 
-            last_plays_cache := list.map(get_updated_last_plays_for_each_required_tag_name, station_nonrepetition_reqs)
+            last_plays_cache := list.map(get_updated_last_plays_for_each_required_tag_name, station_nonrepetition_reqs())
         end
     end
 
@@ -685,52 +709,56 @@ def is_request_approved(req) =
         end
     end
 
-    # make sure specials state is correct before looking at anything else
-    update_specials_and_last_played_state()
+    # Okay, with definitions done, let's get started with seeing if the requested track is good to go
 
-    log("CHECKING REQUEST: " ^ next_request_filename)
+    # make sure specials state is correct before looking at anything else, but don't repeat this if we've already done it at this track change
+    if number_request_checks() < 1 then
+        update_specials_and_last_played_state()
+        # get list of the names of overdue requirements
+        overdue_special_names := list.filter_map(return_special_name_if_overdue, specials_req_overdue_states())
+        log("Overdue specials at end of this track: " ^ string(overdue_special_names()))
+    end
 
-    if number_failed_request_checks() > 10 then # TODO work out the right number here.... no idea. At min need to prevent infinite loops if there is nothing.
-        log("APPROVED - Too many failed expensive checks, so accepting track to move on!")
-        number_failed_request_checks := 0
-        true
+    # log("CHECKING REQUEST: " ^ next_request_filename)
+    number_request_checks := number_request_checks() + 1
+
+    # Reject immediately if this is a dumb hidden file like .DS_store
+    file_only_name = list.last(string.split(separator="/", next_request_filename))
+    if (string.sub(file_only_name, start=0, length=1) == ".") then
+        # log("REJECTED - Hidden file - not a valid track!")
+        false
     else
-        # Reject if this is a dumb hidden file like .DS_store
-        file_only_name = list.last(string.split(separator="/", next_request_filename))
-        if (string.sub(file_only_name, start=0, length=1) == ".") then
-            log("REJECTED - Hidden file - not a valid track!")
-            false
+        # 1000 is somewhat arbitrary, but need to prevent infinite loops and not take *too* long on checks before giving up
+        # TODO: maybe make this an optional config parameter with default of 1000
+        if number_request_checks() > 1000 then
+            log("APPROVED " ^ next_request_filename ^ " - 1000 tries failed to meet requirements, so accepting this track to move on!")
+            number_request_checks := 0
+            true
         else
             next_request_metadata := request.metadata(req)
             # log(string(next_request_metadata())) # if you want to take a look at all metadata available
 
             # Reject if the track is a repetition that violates the stations rules
-            
-            number_failed_request_checks := number_failed_request_checks() + 1 # count it, now that the cheap check is done
-            all_repetition_rules_satisfied = list.for_all(is_nonrepetition_req_satisfied, station_nonrepetition_reqs)
+            all_repetition_rules_satisfied = list.for_all(is_nonrepetition_req_satisfied, station_nonrepetition_reqs())
             if not all_repetition_rules_satisfied then
-                log("REJECTED - Track violates repetition rule!")
+                # log("REJECTED - Track violates at least one repetition rule!")
                 false
             else
                 # Classify the track's specials and see if it meets any overdue specials requirements
 
                 # classify the track no matter what, even if no speicials are overdue, to build up the cache if nothing else
                 classified_track_special_names := classify_track(next_request_metadata())
-                log("This track matches specials: " ^ string(classified_track_special_names()))
-
-                # get list of the names of overdue requirements only
-                overdue_special_names = list.filter_map(return_special_name_if_overdue, specials_req_overdue_states())
-                log("Currently overdue specials: " ^ string(overdue_special_names))
+                # log("This track matches specials: " ^ string(classified_track_special_names()))
                 
-                if list.length(overdue_special_names) > 0 and not list.exists(does_classified_track_include_special, overdue_special_names) then
+                if list.length(overdue_special_names()) > 0 and not list.exists(does_classified_track_include_special, overdue_special_names()) then
                     # try again...
-                    log("REJECTED - Track doesn't meet any of the currently overdue requirements!")
+                    # log("REJECTED - Track doesn't meet any of the currently overdue requirements!")
                     false
                 else
                     # success!
-                    log("APPROVED - Track is good to play based on current requirements!")
+                    log("APPROVED " ^ next_request_filename ^ " " ^ string(classified_track_special_names()) ^ " after " ^ string(number_request_checks()) ^ " tries. Will meet requirements!")
                     # reset the counter and approve this track to play next
-                    number_failed_request_checks := 0
+                    number_request_checks := 0
                     true
                 end
             end
@@ -858,18 +886,28 @@ def say(thing_to_say) =
         # call the TTS server endpoint
         json_say_response = http.post(data=json_say_request, timeout=30.0, station_tts_server_endpoint)
 
-        # parse JSON response
-        let json.parse say_response = json_say_response
-        result = say_response.result ?? "ERROR"
-        data = say_response.data ?? "Bad response from TTS script"
-        if (result == "SUCCESS") then
-            # TODO probably should also check to see if there's a valid wav or something ideally.
-            say_file_path = station_tts_announcements_path ^ data
-            playover(say_file_path)
-        else
-            tts_error = data
-            log("TTS error: " ^ tts_error)
-        end  
+
+        try
+            # parse JSON response. using optional annotations mostly to avoid the warning in logs
+            let json.parse ( say_response :
+                {
+                    result: string?,
+                    data: string?
+                }?
+            ) = json_say_response
+            result = say_response.result ?? "ERROR"
+            data = say_response.data ?? "Bad response from TTS server"
+            if (result == "SUCCESS") then
+                # TODO probably should also check to see if there's a valid wav or something ideally.
+                say_file_path = station_tts_announcements_path ^ data
+                playover(say_file_path)
+            else
+                tts_error = data
+                log("TTS error: " ^ tts_error)
+            end
+        catch err do
+            log("Request to TTS server failed...\n    Kind: " ^ err.kind ^ "\n    Message: " ^ err.message)
+        end 
     else
         log("Station voice_type not supported. SAY command ignored.")
     end
@@ -1265,8 +1303,8 @@ def update_current_next_shows () =
         next_scheduled_show_hour := list.hd(default=0, tomorrows_show_hours())
         next_scheduled_show_time := tomorrow_start_time + float_of_int(next_scheduled_show_hour()) * 3600.0
     end
-    log("    Current show:  " ^ current_scheduled_show_name())
-    log("    Next show:     " ^ next_scheduled_show_name())
+    log("    Current show:  " ^ current_scheduled_show_name() ^ "  (started at " ^ string(current_scheduled_show_hour()) ^ ":00)")
+    log("    Next show:     " ^ next_scheduled_show_name() ^ "  (will start at " ^ string(next_scheduled_show_hour()) ^ ":00)")
 end
 
 

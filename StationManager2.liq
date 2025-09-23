@@ -239,9 +239,6 @@ list.iter(get_show, show_list)
 
 log("STARTUP: loading show schedule...")
 
-# TODO: If no file configured, should be smart enough to just pull list of directories
-#       from station_playlists_root (if specified) and set reasonable defaults
-# TODO: Deal with failure-to-read better with thoughtful defaults and handling
 # TODO: Ultimately this should probably be in a func so it can be skipped, and so the file can be re-read for updates
 
 showschedule_types = ref ([]) # "daysofweek", "everyday", ...
@@ -823,7 +820,6 @@ def is_request_approved(req) =
             end
         end
     end
-    # TODO Add show start/end options
 end
 
 

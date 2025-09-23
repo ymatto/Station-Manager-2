@@ -63,11 +63,11 @@ def say(input_string) =
 
     if (result == "SUCCESS") then
         # TODO probably should also check to see if there's a valid wav or something ideally.
-        say_file_path = data
+        say_file_path = "/tmp/" ^ data
 
         # Queue up the speech along with some bookending silence
         playover_source.push(request.create("synth:shape=sine,frequency=0.0,duration=3"))
-        playover_source.push(request.create("file:" ^ say_file_path ^ ""))
+        playover_source.push(request.create("file:" ^ say_file_path))
         playover_source.push(request.create("synth:shape=sine,frequency=0.0,duration=1"))
         "Done."
     else

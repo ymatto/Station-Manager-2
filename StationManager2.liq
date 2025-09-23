@@ -3,13 +3,19 @@
 # ie.: /Users/omm/Basscadet/StationManager2.liq -- stationconfig.json
 
 
+# MIT License
+# Copyright (c) 2025 Matthew Hine
+
+# Designed to run with Liquidsoap v2.4
+
+
 
 # LOAD STATIONCONFIG
 
 log("STARTUP")
 
 stationconfig_filename = argv(default="stationconfig.json", 1)
-log("Loading station congifuration from " ^ stationconfig_filename)
+log("STARTUP: Loading station congifuration from " ^ stationconfig_filename)
 
 if not file.exists(stationconfig_filename) then
     shutdown()
@@ -17,6 +23,7 @@ end
 stationconfig_file = file.contents(stationconfig_filename)
 
 
+# TODO: Use proper type annotation once it's possible to specify defaults there. Until then, just accept the log warning.
 let json.parse stationconfig = stationconfig_file
 
 # TODO: Halt script if certain minimum things aren't set?
@@ -24,6 +31,9 @@ let json.parse stationconfig = stationconfig_file
 
 station_showconfig_path = stationconfig.showconfig_path ?? "showconfig.json"
 station_showschedule_path = stationconfig.showschedule_path ?? "showschedule.json"
+station_specials_path = stationconfig.specials_path ?? "station_specials.json"
+station_specials_reqs_path = stationconfig.specials_reqs_path ?? "station_specials_reqs.json"
+station_nonrepetition_reqs_path = stationconfig.nonrepetition_reqs_path ?? "station_nonrepetition_reqs.json"
 station_playlists_root = ref (stationconfig.playlists_root ?? "music/") # TODO: better way than using ref?
 
 station_icecast_name = stationconfig.icecast_name ?? ""
@@ -58,6 +68,9 @@ station_tts_announcements_path = stationconfig.tts_announcements_path ?? "/tmp/"
 if (station_log_path != "") then
     settings.log.file.path.set(station_log_path)
 end
+# I dunno, this doesn't seem to actually quiet the ffmpeg logs, but leaving it anyway
+settings.ffmpeg.log.verbosity.set("quiet")
+settings.ffmpeg.log.level := -8
 
 # Server setup
 if (station_telnet_server) then
@@ -70,12 +83,111 @@ end
 
 
 
+# LOAD STATION SPECIALS
+
+log("STARTUP: Loading specials...")
+
+# This is your definition for specials to classify tracks with and filter on
+#   `name` is your own name for the special, to be referred to in the station_specials_reqs
+#   `rules` is a list of rules that must all be fulfilled for a track to be classified with this special
+#       `tag` is the metadata tag to use for the rule
+#       `filter` is one of a fixed list that defines how to interpret and filter based on the tag:
+#           is number equal to
+#           is number no less than
+#           is number no more than
+#           is string
+#           is string that includes
+#           is timestamp in the last seconds (tag must be in unix time)
+#           is year in the last years (tag must be YYYY format)
+#           is date in the last days (tag must be YYYY-MM-DD format)
+#       `value` is what to measure the rule against
+station_specials = ref([])
+if (file.exists(station_specials_path)) then
+    station_specials_file = file.contents(station_specials_path)
+    let json.parse ( new_station_specials :
+        [
+            {
+                name: string,
+                rules: [
+                    {
+                        tag: string,
+                        filter: string,
+                        value: string
+                    }
+                ]
+            }
+        ] ) = station_specials_file 
+    station_specials := new_station_specials
+else
+    log("         Skipping, no specials file found at: " ^ station_specials_path)
+end
+
+
+
+# LOAD STATION SPECIALS REQUIREMENTS
+
+log("STARTUP: Loading specials requirements...")
+
+# This is your definition for when or how often specials should ideally be played
+#   `special_name` refers to one of the specials you defined in station_specials
+#   `per_hour_target`, if set, is a target number of plays for the special within a given hour
+#   `try_top_of_hour`, if set, tries to play the special as the first thing after an hour switch
+# TODO ... also want to implement options for `try_show_start` and `try_show_end`
+station_specials_reqs = ref([])
+if (file.exists(station_specials_reqs_path)) then
+    station_specials_reqs_file = file.contents(station_specials_reqs_path)
+    let json.parse ( new_station_specials_reqs :
+        [ 
+            {
+                special_name: string,
+                per_hour_target: int,
+                try_top_of_hour: bool
+            }
+        ] ) = station_specials_reqs_file
+    station_specials_reqs := new_station_specials_reqs
+else
+    log("         Skipping, no specials requirements file found at: " ^ station_specials_reqs_path)
+end
+
+
+
+# LOAD STATION NON-REPEITITION REQUIREMENTS
+
+log("STARTUP: Loading non-repetition requirements...")
+
+# This is your definition for what sorts of repetitions should be disallowed
+#   `tag_name` sets a metadata tag to check for repetition ("filename" isn't technically an ID3 tag but can be treated like one here)
+#   `dont_repeat_within_last` is one of a fixed list of options for the period during which the tag should not be repeated:
+#       track
+#       15 minutes
+#       hour
+#       3 hours
+#       12 hours
+#       day
+station_nonrepetition_reqs = ref([])
+if (file.exists(station_nonrepetition_reqs_path)) then
+    station_nonrepetition_reqs_file = file.contents(station_nonrepetition_reqs_path)
+    let json.parse ( new_station_nonrepetition_reqs :
+        [
+            {
+                tag_name: string,
+                dont_repeat_within_last: string
+            }
+        ] ) = station_nonrepetition_reqs_file
+    station_nonrepetition_reqs := new_station_nonrepetition_reqs
+else
+    log("         Skipping, no specials requirements file found at: " ^ station_specials_reqs_path)
+end
+
+
+
+
+
 # LOAD SHOWCONFIG
 
 log("STARTUP: loading showconfig...")
 
 # TODO: For now just pulling a list of names for the sake of the currentShow.log, need to parse the rest
-# TODO: Deal with failure-to-read better with thoughtful defaults and handling
 
 # TODO should do show_names here too, just as a convenient list of keys for the other lists
 show_paths = ref ([]) # ("Beats", "files/Instrumental Hip-Hop"), ("Groovestyle", "files/Stylish Background"), ...
@@ -104,6 +216,7 @@ def get_show(thisshow) =
     thisshowkey = fst(thisshow) # TODO <-- AKA this_show_name, see note above
     thisshowdata = snd(thisshow)
 
+    # TODO: all these "list.append" usages can probably be list.add... we're just adding one element
     thisshowpath = thisshowdata.playlist_path # this is required - will fail if missing
     show_paths := list.append([(thisshowkey, "#{station_playlists_root()}#{thisshowpath}")], show_paths())
     thisshowlongname = thisshowdata.show_longname ?? "error" # TODO: deal with failure better
@@ -126,9 +239,6 @@ list.iter(get_show, show_list)
 
 log("STARTUP: loading show schedule...")
 
-# TODO: If no file configured, should be smart enough to just pull list of directories
-#       from station_playlists_root (if specified) and set reasonable defaults
-# TODO: Deal with failure-to-read better with thoughtful defaults and handling
 # TODO: Ultimately this should probably be in a func so it can be skipped, and so the file can be re-read for updates
 
 showschedule_types = ref ([]) # "daysofweek", "everyday", ...
@@ -138,6 +248,7 @@ showschedule_show_hours = ref ([]) # [0, 7, 16], [0, 12], ...
 
 showschedule_file = file.contents(station_showschedule_path)
 
+# no optioanl types here - all required as shown to have a valid schedule
 let json.parse (showschedule_list : [{
         type: string,
         days: [string],
@@ -158,7 +269,6 @@ def get_showschedule(thisshowschedule) =
 end
     
 list.iter(get_showschedule, showschedule_list)
-
 
 
 
@@ -190,8 +300,8 @@ def dynsource_handle_wake_up() =
 end
 
 # add handles on status
-broadcast_source.on_shutdown(dynsource_handle_shutdown)
-broadcast_source.on_wake_up(dynsource_handle_wake_up)
+broadcast_source.on_shutdown(synchronous=true, dynsource_handle_shutdown)
+broadcast_source.on_wake_up(synchronous=true, dynsource_handle_wake_up)
 
 # Create final broadcast output to public icecast
 output.icecast(
@@ -213,23 +323,64 @@ output.icecast(
 # --- SHOW CONTROL --------------------------------------------------------------------
 
 
-# FUNCTIONS TO UPDATE LOG DATA ON NEW METADATA ON BROADCAST
+# METADATA FUNCTIONS, INCLUDING LOGGING
 
 recent_tracks = ref ([])
 new_tracklog = ref ("")
 
-# Write stuff whenever there's new metadata
+# Get a metadata tag's value, including dealing with weird ID3 ambiguities
+def get_metadata_value(this_tag, this_metadata)
+    if ( this_tag == "date" or this_tag == "year" ) then
+        # "date" is technically deprecated in favor of "year", but lots of tracks have
+        # used date, so most software just treats both tags as "year". we'll try to be
+        # as nice as we can here.
+        this_date = list.assoc(default="", "date", this_metadata)
+        this_year = list.assoc(default="", "year", this_metadata)
+        if ( this_date == "" and this_year == "" ) then
+            ""
+        elsif ( this_date == "" and this_year != "" ) then
+            this_year
+        elsif ( this_date != "" and this_year == "" ) then
+            this_date
+        else
+            # if they're both set, return the one that was specifically requested
+            if this_tag == "date" then
+                this_date
+            else
+                this_year
+            end
+        end
+    elsif ( this_tag == "artist") then
+        # when asking for "artist", albumartist may be a reasonable thing to use anyway
+        this_artist = list.assoc(default="", "artist", this_metadata)
+        this_albumartist = list.assoc(default="", "albumartist", this_metadata)
+        if ( this_artist == "" and this_albumartist == "") then
+            ""
+        elsif ( this_artist == "" and this_albumartist != "") then
+            this_albumartist
+        elsif ( this_artist != "" and this_albumartist == "") then
+            this_artist
+        else
+            # if they're both set, prefer albumartist
+            this_albumartist
+        end
+    else
+        # the tag isn't any of our special cases, so just get what's in there and return it
+        list.assoc(default="", this_tag, this_metadata)
+    end
+end
 
+# Write stuff whenever there's new metadata
 def addtotracklog(nexttrack) =
   new_tracklog := string.concat([new_tracklog(), nexttrack, "\n"])
 end
 
-def logtrack(metadata) =
+def logtrack(this_metadata) =
     # TODO (maybe, if still relevant) don't log if the info is blank or "-" or whatever at show changes
     if (station_tracklog_path != "") then
-        artist = metadata["artist"]
-        album = metadata["album"]
-        title = metadata["title"]
+        artist = get_metadata_value("artist", this_metadata)
+        album = get_metadata_value("album", this_metadata)
+        title = get_metadata_value("title", this_metadata)
         newline="#{artist} - #{album} - #{title}"
         recent_tracks := list.add(newline, recent_tracks())
         if (list.length(recent_tracks()) > 20) then
@@ -276,16 +427,22 @@ def get_current_hour() =
 end
 
 def get_time_since_midnight() =
-    sec = time.local().sec
-    min = time.local().min
-    hour = time.local().hour
-    float_of_int(sec + (min * 60 + (hour * 3600)))
+    this_sec = time.local().sec
+    this_min = time.local().min
+    this_hour = time.local().hour
+    float_of_int(this_sec + (this_min * 60 + (this_hour * 3600)))
 end
 
 def get_time_since_last_hour() =
-    sec = time.local().sec
-    min = time.local().min
-    float_of_int(sec + (min * 60))      
+    this_sec = time.local().sec
+    this_min = time.local().min
+    float_of_int(this_sec + (this_min * 60))      
+end
+
+def get_time_since_last_hour_at(this_time)
+    this_sec = time.local(this_time).sec
+    this_min = time.local(this_time).min
+    float_of_int(this_sec + (this_min * 60))      
 end
 
 # returns the unixtime at midnight at the start of today
@@ -293,6 +450,21 @@ def get_today_start_time() =
     now = time()
     time_since_midnight = get_time_since_midnight()
     now - time_since_midnight
+end
+
+# Convert from YYYY-MM-DD format to unix timestamp float
+def time_from_YMD(YMD_string) 
+    YMD_list = string.split(separator="-", YMD_string)
+    if list.length(YMD_list) == 3 then
+        time.make({
+            year=int_of_string(list.nth(YMD_list, 0)),
+            month=int_of_string(list.nth(YMD_list, 1)),
+            day=int_of_string(list.nth(YMD_list, 2)),
+            hour=0, min=0, sec=0, dst=false
+        })
+    else
+        0.0
+    end
 end
 
 
@@ -312,7 +484,348 @@ timed_command_queue = ref ([]) # [([commandname, arg], exec_unixtime), ...]
 trackend_command_queue = ref ([]) # [([commandname, arg], exec_delay_after_trackend), ...]
 pre_trackend_command_queue = ref ([]) # [([commandname, arg], exec_time_before_trackend), ...]
 
-# command queue management functions
+# keep track of what specials requirements are overdue
+specials_req_overdue_states = ref([]) # [ ("Best Of", false), (...) ]
+overdue_special_names = ref([]) # [ "Best Of", "90s Jams", ... ]
+specials_req_plays_this_hour = ref([]) # [ ("Best Of", 3), (...) ]
+specials_hour = ref(time.local().hour)
+
+# keep a cache of the specials each track matches to avoid repeated complicated analysis of metadata
+track_special_matches_cache = ref([])
+    # [
+    #     ( "/path/to/file.mp3", ["Best Of", "Last 30-day Adds"] ),
+    #     ( "/some/other/file.mp3", ["Best Of"] )
+    # ]
+
+# keep track of when various types of things played for repetition filtering
+last_plays_cache = ref([])
+    # [
+    #     ("album", [("Oversteps", 1749521413.0), ("ISDN", 1749521413.0)]),
+    #     ("filename", [("/path/to/music.mp3", 1749521413.0), "/some/other/file.mp3", 1749521413.0])
+    # ]
+
+
+
+
+# Source/track processing functions
+
+# Return the list of this station's specials that the track in question matches
+def classify_track(this_metadata)
+
+    # Set the context for the track for handlers
+    classifying_track_metadata = ref(this_metadata)
+
+    # Iterator to see if each rule is met
+    def check_rule(this_rule)
+        # bunch of logic to check classifying_track_metadata against this_rule.tag/.filter/.value
+        this_tag = this_rule.tag
+        this_filter = this_rule.filter
+        this_value = this_rule.value
+        track_value = get_metadata_value(this_tag, classifying_track_metadata())
+
+        if ( this_tag == "" or this_value == "" ) then
+            # rule is incompletely defined... I guess we consider it "met"
+            log("WARNING: Missing special tag or value - special cannot be satisfied")
+            true
+        elsif this_filter == "is number equal to" then
+            track_value_float = float_of_string(track_value, default=0.0)    
+            this_value_float = float_of_string(this_value)
+            track_value_float == this_value_float
+        elsif this_filter == "is number no less than" then
+            track_value_float = float_of_string(track_value, default=0.0)
+            this_value_float = float_of_string(this_value)
+            track_value_float >= this_value_float
+        elsif this_filter == "is number no more than" then
+            track_value_float = float_of_string(track_value, default=0.0)
+            this_value_float = float_of_string(this_value)
+            track_value_float <= this_value_float
+        elsif this_filter == "is string" then
+            track_value == this_value
+        elsif this_filter == "is string that includes" then
+            string.contains(substring=this_value, track_value)
+        elsif this_filter == "is timestamp in the last seconds" then
+            track_value_timestamp = float_of_string(track_value, default=0.0)
+            this_value_time = float_of_string(this_value)
+            (time() - track_value_timestamp) <= this_value_time
+        elsif this_filter == "is year in the last years" then # YYYY
+            track_value_year = int_of_string(track_value, default=0)    
+            this_value_year = int_of_string(this_value)
+            (time.local().year - track_value_year) <= this_value_year
+        elsif this_filter == "is date in the last days" then # YYYY-MM-DD
+            track_value_time = time_from_YMD(track_value)
+            this_value_time = time_from_YMD(this_value)
+            if this_value_time == 0.0 then
+                # bogus filter, consider it "met"
+                log("WARNING: Invalid YYYY-MM-DD format used in special definition - special cannot be satisfied")
+                true
+            elsif track_value_time == 0.0 then
+                # track doesn't have anything to check against filter, don't consider it met
+                false
+            else
+                (time() - track_value_time) <= this_value_time
+            end
+        else
+            # again, if it's a bogus filter, then I guess consider it "met"
+            log("WARNING: Unsupported special requirement rule filter encountered")
+            true
+        end
+    end
+
+    # Iterator to determine which specials a track fits
+    def check_special(this_special)
+        # iterate through rules, only add the special name if *all* rules are true
+        if list.for_all(check_rule, this_special.rules) then
+            this_special.name
+        else
+            null
+        end
+    end
+
+    # Start the classification process
+    this_filename = this_metadata["filename"]
+    cached_specials_matched = list.assoc(default=[], this_filename, track_special_matches_cache())
+    if cached_specials_matched != [] then # already classified
+        # return the cached results
+        cached_specials_matched
+    else
+        # iterate through station_specials to see which match this file, returning a list of matched specials
+        specials_matched = list.filter_map(check_special, station_specials())
+        # update the cache
+        track_special_matches_cache := list.add((this_filename, specials_matched), track_special_matches_cache())
+        # return the (now cached) results
+        specials_matched
+    end
+end
+
+
+# Keep track of some things *between calls* to is_request_approved, so we can be smarter when churning through request rejections
+last_current_track_checked = ref("")
+number_request_checks = ref(0)
+
+# Called as source's check_next - decide if the next request should be played or not based on specials and repetition rules
+def is_request_approved(req) =
+
+    # Find out what the proposed request to play next is and consider its suitability
+    ignore(request.resolve(req))
+    next_request_filename = request.filename(req)
+    next_request_metadata = ref([]) # don't get it until we know it's a valid file
+
+    # big function to see what specials state we'll be in, considering the currently playing track **at the time when it finishes**
+    # intended to be called just after a track has started playing, although it does avoid redundant tallying if called more than once during a track
+    def update_specials_and_last_played_state()
+        # get the playing track (likely just started as the next playlist request)
+        current_track_metadata = current_show_source().last_metadata() ?? []
+        current_track_remaining = source.remaining(current_show_source())
+        current_track_filename = current_track_metadata["filename"]
+
+        top_of_hour_play = ref(false)
+
+        def increment_special_req_plays(this_special_name)
+            this_playcount = list.assoc(default=0, this_special_name, specials_req_plays_this_hour())
+            specials_req_plays_this_hour := list.add((this_special_name, this_playcount + 1), list.assoc.remove(this_special_name, specials_req_plays_this_hour()))
+        end
+
+        # update state of specials and repetitions, if we haven't done so for the playing track
+        if last_current_track_checked() != current_track_filename then # only do this once per track switch
+            
+            last_current_track_checked := current_track_filename
+
+            # get the specials the playing track matches
+            track_special_names = classify_track(current_track_metadata)
+            # increment specials_req_plays_this_hour with the the track_special_names, for the *current* time
+            list.iter(increment_special_req_plays, track_special_names)
+            log("Updated specials play count for the " ^ string(specials_hour()) ^ ":00 hour with track " ^ current_track_filename ^ "\n    " ^ string(specials_req_plays_this_hour()))
+
+            # if it will be a new hour at the *end* of this track, clear specials tracking for last hour
+            # and reset current hour so we register this track's specials toward next hour
+            time_at_track_end = time() + current_track_remaining
+            hour_of_track_end = time.local(time_at_track_end).hour
+            if specials_hour() != hour_of_track_end then
+                log("Next track will start in a new hour of specials!")
+                specials_req_overdue_states := []
+                specials_req_plays_this_hour := []
+                specials_hour := hour_of_track_end
+                top_of_hour_play := true
+            else
+                top_of_hour_play := false
+            end
+
+            # update specials_req_overdue_states **for time at the expected end of current track**
+
+            # iterator to figure out the overdue status of a given special requirement
+            def get_special_state(this_special_reqs)
+
+                this_special_name = this_special_reqs.special_name # "Best Of"
+                this_per_hour_target = this_special_reqs.per_hour_target ?? 0
+                this_try_top_of_hour = this_special_reqs.try_top_of_hour ?? false
+                this_special_overdue_state = ref(false)
+                
+                # TODO: add more options like perhaps try_show_end, try_show_start, per_day_target, per_show_target ?
+                if this_try_top_of_hour and top_of_hour_play() then
+                    # per_hour_target doesn't matter - top_of_hour requirement makes this special immediately overdue
+                    this_special_overdue_state := true
+                elsif this_per_hour_target > 0 then
+                    # let's see about the per-hour target
+                    req_period = 3600.0 / float_of_int(this_per_hour_target)
+                    expected_time_since_hour = get_time_since_last_hour_at(time() + current_track_remaining) # at end of current track
+                    target_plays = int_of_float(floor( (expected_time_since_hour + (req_period / 2.0)) / req_period ) )
+                        # important math... for example:
+                        # 1 play per hour adds target_play increment at 30 minute mark
+                        # 3 plays per hour adds target_play increments at 10, 30, and 50 minute marks
+                    actual_plays = list.assoc(default=0, this_special_name, specials_req_plays_this_hour())
+                    if target_plays > actual_plays then
+                        # we're behind - make this overdue
+                        this_special_overdue_state := true
+                    end
+                end 
+
+                (this_special_name, this_special_overdue_state())
+            end
+
+            new_specials_overdue_states = list.map(get_special_state, station_specials_reqs())
+            specials_req_overdue_states := new_specials_overdue_states
+
+            # Update last_plays_cache based on current_track's metadata
+            # log("Updating last play times with: " ^ current_track_filename)
+            def get_updated_last_plays_for_each_required_tag_name(this_nonrepetition_req)
+                this_tag_name = this_nonrepetition_req.tag_name
+                this_last_plays = list.assoc(default=[], this_tag_name, last_plays_cache())
+
+                tag_of_current_track = list.assoc(default="", this_tag_name, current_track_metadata)
+                updated_this_last_plays = list.add((tag_of_current_track, time()), list.assoc.remove(tag_of_current_track, this_last_plays))
+                (this_tag_name, updated_this_last_plays)
+            end
+
+            last_plays_cache := list.map(get_updated_last_plays_for_each_required_tag_name, station_nonrepetition_reqs())
+        end
+    end
+
+    def return_special_name_if_overdue(this_special_req_overdue_state)
+         let (special_name, state) = this_special_req_overdue_state
+        # only return the req_name if its overdue state is true
+        if state then
+            special_name
+        else
+            null
+        end
+    end
+
+    classified_track_special_names = ref([]) # ["Best Of", "Last 30-day Adds"]
+
+    def does_classified_track_include_special(this_special_name)
+        list.exists(fun(x) -> x == this_special_name, classified_track_special_names())
+    end
+
+    def is_nonrepetition_req_satisfied(this_req)
+        this_tag_name = this_req.tag_name
+        this_dont_repeat_within_last = this_req.dont_repeat_within_last
+
+        tag_of_this_track = list.assoc(default="", this_tag_name, next_request_metadata())
+        within_time = ref(0.0)
+        if this_dont_repeat_within_last == "track" then
+            playing_track_metadata = current_show_source().last_metadata() ?? []
+            tag_of_playing_track = list.assoc(default="", this_tag_name, playing_track_metadata)
+            if tag_of_this_track == tag_of_playing_track then
+                false
+            else
+                true
+            end
+        else
+            if this_dont_repeat_within_last == "15 minutes" then
+                within_time := 900.0
+            elsif this_dont_repeat_within_last == "hour" then
+                within_time := 3600.0
+            elsif this_dont_repeat_within_last == "3 hours" then
+                within_time := 10800.0
+            elsif this_dont_repeat_within_last == "12 hours" then
+                within_time := 43200.0
+            elsif this_dont_repeat_within_last == "day" then
+                within_time := 86400.0
+            end
+
+            last_plays_for_tag_name = list.assoc(default=[("",0.0)], this_tag_name, last_plays_cache())
+            last_play = list.assoc(default=0.0, tag_of_this_track, last_plays_for_tag_name)
+
+            if time() - last_play < within_time() then
+                false
+            else
+                true
+            end
+        end
+    end
+
+    # Okay, with definitions done, let's get started with seeing if the requested track is good to go
+
+    # make sure specials state is correct before looking at anything else, but don't repeat this if we've already done it at this track change
+    if number_request_checks() < 1 then
+        update_specials_and_last_played_state()
+        # get list of the names of overdue requirements
+        overdue_special_names := list.filter_map(return_special_name_if_overdue, specials_req_overdue_states())
+        log("Overdue specials at end of this track: " ^ string(overdue_special_names()))
+    end
+
+    # log("CHECKING REQUEST: " ^ next_request_filename)
+    number_request_checks := number_request_checks() + 1
+
+    # Reject immediately if this is a dumb hidden file like .DS_store
+    file_only_name = list.last(string.split(separator="/", next_request_filename))
+    if (string.sub(file_only_name, start=0, length=1) == ".") then
+        # log("REJECTED - Hidden file - not a valid track!")
+        false
+    else
+        # 1000 is somewhat arbitrary, but need to prevent infinite loops and not take *too* long on checks before giving up
+        # TODO: maybe make this an optional config parameter with default of 1000
+        if number_request_checks() > 1000 then
+            log("APPROVED " ^ next_request_filename ^ " - 1000 tries failed to meet requirements, so accepting this track to move on!")
+            number_request_checks := 0
+            true
+        else
+            next_request_metadata := request.metadata(req)
+            #<
+            md_for_log = next_request_metadata()
+            # some raw dumping of specific fields
+            log("TITLE:        " ^ md_for_log["title"])
+            log("ALBUM:        " ^ md_for_log["album"])
+            log("ARTIST:       " ^ md_for_log["artist"])
+            log("ALBUM ARTIST: " ^ md_for_log["albumartist"])
+            log("DATE:         " ^ md_for_log["date"])
+            log("YEAR:         " ^ md_for_log["year"])
+            >#
+            # of if you want to take a look at all metadata (incl. album art)... but it's a lot
+            # log(string(md_for_log)) 
+
+            # Reject if the track is a repetition that violates the stations rules
+            all_repetition_rules_satisfied = list.for_all(is_nonrepetition_req_satisfied, station_nonrepetition_reqs())
+            if not all_repetition_rules_satisfied then
+                # log("REJECTED - Track violates at least one repetition rule!")
+                false
+            else
+                # Classify the track's specials and see if it meets any overdue specials requirements
+
+                # classify the track no matter what, even if no speicials are overdue, to build up the cache if nothing else
+                classified_track_special_names := classify_track(next_request_metadata())
+                # log("Track matches specials: " ^ string(classified_track_special_names()))
+                
+                if list.length(overdue_special_names()) > 0 and not list.exists(does_classified_track_include_special, overdue_special_names()) then
+                    # try again...
+                    # log("REJECTED - Track doesn't meet any of the currently overdue requirements!")
+                    false
+                else
+                    # success!
+                    log("APPROVED " ^ next_request_filename ^ " " ^ string(classified_track_special_names()) ^ " after " ^ string(number_request_checks()) ^ " tries. Will meet requirements!")
+                    # reset the counter and approve this track to play next
+                    number_request_checks := 0
+                    true
+                end
+            end
+        end
+    end
+end
+
+
+
+
+# Command queue management functions
 
 def sort_command_queue_by_time_ascending(command_pair1, command_pair2) =
     command_time1 = snd(command_pair1)
@@ -428,18 +941,28 @@ def say(thing_to_say) =
         # call the TTS server endpoint
         json_say_response = http.post(data=json_say_request, timeout=30.0, station_tts_server_endpoint)
 
-        # parse JSON response
-        let json.parse say_response = json_say_response
-        result = say_response.result ?? "ERROR"
-        data = say_response.data ?? "Bad response from TTS script"
-        if (result == "SUCCESS") then
-            # TODO probably should also check to see if there's a valid wav or something ideally.
-            say_file_path = station_tts_announcements_path ^ data
-            playover(say_file_path)
-        else
-            error = data
-            log("TTS error: " ^ error)
-        end  
+
+        try
+            # parse JSON response. using optional annotations mostly to avoid the warning in logs
+            let json.parse ( say_response :
+                {
+                    result: string?,
+                    data: string?
+                }?
+            ) = json_say_response
+            result = say_response.result ?? "ERROR"
+            data = say_response.data ?? "Bad response from TTS server"
+            if (result == "SUCCESS") then
+                # TODO probably should also check to see if there's a valid wav or something ideally.
+                say_file_path = station_tts_announcements_path ^ data
+                playover(say_file_path)
+            else
+                tts_error = data
+                log("TTS error: " ^ tts_error)
+            end
+        catch err do
+            log("Request to TTS server failed...\n    Kind: " ^ err.kind ^ "\n    Message: " ^ err.message)
+        end 
     else
         log("Station voice_type not supported. SAY command ignored.")
     end
@@ -454,8 +977,8 @@ end
 
 # show management functions (plus change_show queueable command)
 
-def handle_track_end(metadata) = # TODO figure out how to ignore these required handler parameters
-    # TODO before totally ignoring the metadata data here... it seems to include album art? Use with webpage? If the "logtrack" stuff can't?
+def handle_track_end(this_metadata) =
+    ignore(this_metadata)
     log("  - track change signal -")
     track_endtime := true # triggers the command_loop
 end
@@ -466,8 +989,12 @@ def change_show(show_name) =
         log("  --- New show starting: " ^ show_name ^ " ------------------------------------")
     
         show_path = list.assoc(default="error", show_name, show_paths())
-        show_source = playlist(id="scheduled_show_playlist", show_path)
-        show_source.on_metadata(logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
+
+        # The check_next handler kicks off checking if the potentially-next track meets specified requirements
+        show_source = playlist(id="scheduled_show_playlist", check_next=is_request_approved, register_server_commands=false, show_path)
+        
+        # TODO consider switching to on_track (rather than on_metadata), which might avoid bogus metadata... same arguments and everything, one-line change
+        show_source.on_metadata(synchronous=false, logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
         current_show_source := show_source
     
         # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
@@ -479,17 +1006,14 @@ def change_show(show_name) =
         set_fadeout_trackend("false")
 
         # Now create the new source for broadcast
-        # TODO: reintroduce use of the playover_source for voices somehow...    
-        new_output_source =
-            smooth_add(duration=1.5, p=0.1, special=playover_source,
-                normal=source.on_track(id="track_end_handler",
-                    switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
-                        switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
-                            show_source
-                        ) ] )
-                    ) ] )
-                , handle_track_end)
-            )
+        show_source_with_switches = 
+            switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
+                switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
+                    show_source
+                ) ] )
+            ) ] )
+        show_source_with_switches.on_track(synchronous=true, handle_track_end)
+        new_output_source = smooth_add(duration=1.5, p=0.1, special=playover_source, normal=show_source_with_switches)
 
         # Set the source used by the dynamic broadcast source
         current_output_source := new_output_source
@@ -833,8 +1357,8 @@ def update_current_next_shows () =
         next_scheduled_show_hour := list.hd(default=0, tomorrows_show_hours())
         next_scheduled_show_time := tomorrow_start_time + float_of_int(next_scheduled_show_hour()) * 3600.0
     end
-    log("    Current show:  " ^ current_scheduled_show_name())
-    log("    Next show:     " ^ next_scheduled_show_name())
+    log("    Current show:  " ^ current_scheduled_show_name() ^ "  (started at " ^ string(current_scheduled_show_hour()) ^ ":00)")
+    log("    Next show:     " ^ next_scheduled_show_name() ^ "  (will start at " ^ string(next_scheduled_show_hour()) ^ ":00)")
 end
 
 

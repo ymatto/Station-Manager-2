@@ -649,7 +649,7 @@ def is_request_approved(req) =
             track_special_names = classify_track(current_track_metadata)
             # increment specials_req_plays_this_hour with the the track_special_names
             list.iter(increment_special_req_plays, track_special_names)
-            log("Latest specials plays this hour: " ^ string(specials_req_plays_this_hour()))
+            log("Updated specials plays for the " ^ string(specials_hour()) ^ ":00 hour: " ^ string(specials_req_plays_this_hour()))
 
             # update specials_req_overdue_states **for time at the expected end of current track**
 
@@ -783,9 +783,8 @@ def is_request_approved(req) =
         else
             next_request_metadata := request.metadata(req)
 
-            md_for_log = next_request_metadata()
-            # log(string(md_for_log)) # if you want to take a look at all metadata (incl. album art)... but it's a lot
             #<
+            md_for_log = next_request_metadata()
             # some raw dumping of specific fields
             log("TITLE:        " ^ md_for_log["title"])
             log("ALBUM:        " ^ md_for_log["album"])
@@ -794,6 +793,8 @@ def is_request_approved(req) =
             log("DATE:         " ^ md_for_log["date"])
             log("YEAR:         " ^ md_for_log["year"])
             >#
+            # of if you want to take a look at all metadata (incl. album art)... but it's a lot
+            # log(string(md_for_log)) 
 
             # Reject if the track is a repetition that violates the stations rules
             all_repetition_rules_satisfied = list.for_all(is_nonrepetition_req_satisfied, station_nonrepetition_reqs())

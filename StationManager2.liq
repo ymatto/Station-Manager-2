@@ -324,13 +324,54 @@ output.icecast(
 # --- SHOW CONTROL --------------------------------------------------------------------
 
 
-# FUNCTIONS TO UPDATE LOG DATA ON NEW METADATA ON BROADCAST
+# METADATA FUNCTIONS, INCLUDING LOGGING
 
 recent_tracks = ref ([])
 new_tracklog = ref ("")
 
-# Write stuff whenever there's new metadata
+# Get a metadata tag's value, including dealing with weird ID3 ambiguities
+def get_metadata_value(this_tag, this_metadata)
+    if ( this_tag == "date" or this_tag == "year" ) then
+        # "date" is technically deprecated in favor of "year", but lots of tracks have
+        # used date, so most software just treats both tags as "year". we'll try to be
+        # as nice as we can here.
+        this_date = list.assoc(default="", "date", this_metadata)
+        this_year = list.assoc(default="", "year", this_metadata)
+        if ( this_date == "" and this_year == "" ) then
+            ""
+        elsif ( this_date == "" and this_year != "" ) then
+            this_year
+        elsif ( this_date != "" and this_year == "" ) then
+            this_date
+        else
+            # if they're both set, return the one that was specifically requested
+            if this_tag == "date" then
+                this_date
+            else
+                this_year
+            end
+        end
+    elsif ( this_tag == "artist") then
+        # when asking for "artist", albumartist may be a reasonable thing to use anyway
+        this_artist = list.assoc(default="", "artist", this_metadata)
+        this_albumartist = list.assoc(default="", "albumartist", this_metadata)
+        if ( this_artist == "" and this_albumartist == "") then
+            ""
+        elsif ( this_artist == "" and this_albumartist != "") then
+            this_albumartist
+        elsif ( this_artist != "" and this_albumartist == "") then
+            this_artist
+        else
+            # if they're both set, prefer albumartist
+            this_albumartist
+        end
+    else
+        # the tag isn't any of our special cases, so just get what's in there and return it
+        list.assoc(default="", this_tag, this_metadata)
+    end
+end
 
+# Write stuff whenever there's new metadata
 def addtotracklog(nexttrack) =
   new_tracklog := string.concat([new_tracklog(), nexttrack, "\n"])
 end
@@ -338,9 +379,9 @@ end
 def logtrack(this_metadata) =
     # TODO (maybe, if still relevant) don't log if the info is blank or "-" or whatever at show changes
     if (station_tracklog_path != "") then
-        artist = this_metadata["artist"]
-        album = this_metadata["album"]
-        title = this_metadata["title"]
+        artist = get_metadata_value("artist", this_metadata)
+        album = get_metadata_value("album", this_metadata)
+        title = get_metadata_value("title", this_metadata)
         newline="#{artist} - #{album} - #{title}"
         recent_tracks := list.add(newline, recent_tracks())
         if (list.length(recent_tracks()) > 20) then
@@ -479,45 +520,50 @@ def classify_track(this_metadata)
     def check_rule(this_rule)
         # bunch of logic to check classifying_track_metadata against this_rule.tag/.filter/.value
         this_tag = this_rule.tag
-        this_tag_value = list.assoc(default="", this_tag, classifying_track_metadata())
         this_filter = this_rule.filter
         this_value = this_rule.value
+        track_value = get_metadata_value(this_tag, classifying_track_metadata())
+
         if ( this_tag == "" or this_value == "" ) then
             # rule is incompletely defined... I guess we consider it "met"
-            log("WARNING: Missing special tag or value")
+            log("WARNING: Missing special tag or value - special cannot be satisfied")
             true
         elsif this_filter == "is number equal to" then
-            this_tag_value_float = float_of_string(this_tag_value)    
+            track_value_float = float_of_string(track_value, default=0.0)    
             this_value_float = float_of_string(this_value)
-            this_tag_value_float == this_value_float
+            track_value_float == this_value_float
         elsif this_filter == "is number no less than" then
-            this_tag_value_float = float_of_string(this_tag_value)    
+            track_value_float = float_of_string(track_value, default=0.0)
             this_value_float = float_of_string(this_value)
-            this_tag_value_float >= this_value_float
+            track_value_float >= this_value_float
         elsif this_filter == "is number no more than" then
-            this_tag_value_float = float_of_string(this_tag_value)    
+            track_value_float = float_of_string(track_value, default=0.0)
             this_value_float = float_of_string(this_value)
-            this_tag_value_float <= this_value_float
+            track_value_float <= this_value_float
         elsif this_filter == "is string" then
-            this_tag_value == this_value
+            track_value == this_value
         elsif this_filter == "is string that includes" then
-            string.contains(substring=this_value, this_tag_value)
+            string.contains(substring=this_value, track_value)
         elsif this_filter == "is timestamp in the last seconds" then
-            this_tag_value_time = float_of_string(this_tag_value)    
+            track_value_timestamp = float_of_string(track_value, default=0.0)
             this_value_time = float_of_string(this_value)
-            (time() - this_tag_value_time) <= this_value_time
-        elsif this_filter == "is year in the last years" then
-            this_tag_value_year = int_of_string(this_tag_value)    
+            (time() - track_value_timestamp) <= this_value_time
+        elsif this_filter == "is year in the last years" then # YYYY
+            track_value_year = int_of_string(track_value, default=0)    
             this_value_year = int_of_string(this_value)
-            (time.local().year - this_tag_value_year) <= this_value_year
+            (time.local().year - track_value_year) <= this_value_year
         elsif this_filter == "is date in the last days" then # YYYY-MM-DD
-            this_tag_value_time = time_from_YMD(this_tag_value)
+            track_value_time = time_from_YMD(track_value)
             this_value_time = time_from_YMD(this_value)
-            if this_tag_value_time == 0.0 or this_value_time == 0.0 then
-                log("Invalid YYYY-MM-DD format used in special or ID3 tag")
+            if this_value_time == 0.0 then
+                # bogus filter, consider it "met"
+                log("WARNING: Invalid YYYY-MM-DD format used in special definition - special cannot be satisfied")
                 true
+            elsif track_value_time == 0.0 then
+                # track doesn't have anything to check against filter, don't consider it met
+                false
             else
-                (time() - this_tag_value_time) <= this_value_time
+                (time() - track_value_time) <= this_value_time
             end
         else
             # again, if it's a bogus filter, then I guess consider it "met"
@@ -736,7 +782,18 @@ def is_request_approved(req) =
             true
         else
             next_request_metadata := request.metadata(req)
-            # log(string(next_request_metadata())) # if you want to take a look at all metadata available
+
+            md_for_log = next_request_metadata()
+            # log(string(md_for_log)) # if you want to take a look at all metadata (incl. album art)... but it's a lot
+            #<
+            # some raw dumping of specific fields
+            log("TITLE:        " ^ md_for_log["title"])
+            log("ALBUM:        " ^ md_for_log["album"])
+            log("ARTIST:       " ^ md_for_log["artist"])
+            log("ALBUM ARTIST: " ^ md_for_log["albumartist"])
+            log("DATE:         " ^ md_for_log["date"])
+            log("YEAR:         " ^ md_for_log["year"])
+            >#
 
             # Reject if the track is a repetition that violates the stations rules
             all_repetition_rules_satisfied = list.for_all(is_nonrepetition_req_satisfied, station_nonrepetition_reqs())
@@ -922,8 +979,7 @@ end
 
 # show management functions (plus change_show queueable command)
 
-def handle_track_end(this_metadata) = # TODO figure out how to ignore these required handler parameters
-    # TODO before totally ignoring the metadata data here... it seems to include album art? Use with webpage? If the "logtrack" stuff can't?
+def handle_track_end(this_metadata) =
     ignore(this_metadata)
     log("  - track change signal -")
     track_endtime := true # triggers the command_loop

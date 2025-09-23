@@ -628,10 +628,16 @@ def is_request_approved(req) =
 
         # update state of specials and repetitions, if we haven't done so for the playing track
         if last_current_track_checked() != current_track_filename then # only do this once per track switch
-            log("Updating state of specials with: " ^ current_track_filename)
+            
             last_current_track_checked := current_track_filename
 
-            # if it will be a new hour at the end of this track, clear specials tracking for last hour
+            # get the specials the playing track matches
+            track_special_names = classify_track(current_track_metadata)
+            # increment specials_req_plays_this_hour with the the track_special_names, for the *current* time
+            list.iter(increment_special_req_plays, track_special_names)
+            log("Updated specials play count for the " ^ string(specials_hour()) ^ ":00 hour with track " ^ current_track_filename ^ "\n    " ^ string(specials_req_plays_this_hour()))
+
+            # if it will be a new hour at the *end* of this track, clear specials tracking for last hour
             # and reset current hour so we register this track's specials toward next hour
             time_at_track_end = time() + current_track_remaining
             hour_of_track_end = time.local(time_at_track_end).hour
@@ -644,12 +650,6 @@ def is_request_approved(req) =
             else
                 top_of_hour_play := false
             end
-
-            # get the specials the playing track matches
-            track_special_names = classify_track(current_track_metadata)
-            # increment specials_req_plays_this_hour with the the track_special_names
-            list.iter(increment_special_req_plays, track_special_names)
-            log("Updated specials plays for the " ^ string(specials_hour()) ^ ":00 hour: " ^ string(specials_req_plays_this_hour()))
 
             # update specials_req_overdue_states **for time at the expected end of current track**
 

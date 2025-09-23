@@ -68,7 +68,9 @@ station_tts_announcements_path = stationconfig.tts_announcements_path ?? "/tmp/"
 if (station_log_path != "") then
     settings.log.file.path.set(station_log_path)
 end
+# I dunno, this doesn't seem to actually quiet the ffmpeg logs, but leaving it anyway
 settings.ffmpeg.log.verbosity.set("quiet")
+settings.ffmpeg.log.level := -8
 
 # Server setup
 if (station_telnet_server) then
@@ -86,10 +88,10 @@ end
 log("STARTUP: Loading specials...")
 
 # This is your definition for specials to classify tracks with and filter on
-#   name is your own name for the special, to be referred to in the station_specials_reqs
-#   rules is a list of rules that must all be fulfilled for a track to be classified with this special
-#       tag is the metadata tag to use for the rule
-#       filter is one of a list that defines how to interpret and filter based on the tag:
+#   `name` is your own name for the special, to be referred to in the station_specials_reqs
+#   `rules` is a list of rules that must all be fulfilled for a track to be classified with this special
+#       `tag` is the metadata tag to use for the rule
+#       `filter` is one of a fixed list that defines how to interpret and filter based on the tag:
 #           is number equal to
 #           is number no less than
 #           is number no more than
@@ -98,7 +100,7 @@ log("STARTUP: Loading specials...")
 #           is timestamp in the last seconds (tag must be in unix time)
 #           is year in the last years (tag must be YYYY format)
 #           is date in the last days (tag must be YYYY-MM-DD format)
-#       value is what to measure the rule against
+#       `value` is what to measure the rule against
 station_specials = ref([])
 if (file.exists(station_specials_path)) then
     station_specials_file = file.contents(station_specials_path)
@@ -127,10 +129,10 @@ end
 log("STARTUP: Loading specials requirements...")
 
 # This is your definition for when or how often specials should ideally be played
-#   special_name refers to one of the specials you defined in station_specials
-#   per_hour_target, if set, is a target number of plays for the special within a given hour
-#   try_top_of_hour, if set, tries to play the special as the first thing after an hour switch
-# TODO ... also want to implement options for try_show_start and try_show_end
+#   `special_name` refers to one of the specials you defined in station_specials
+#   `per_hour_target`, if set, is a target number of plays for the special within a given hour
+#   `try_top_of_hour`, if set, tries to play the special as the first thing after an hour switch
+# TODO ... also want to implement options for `try_show_start` and `try_show_end`
 station_specials_reqs = ref([])
 if (file.exists(station_specials_reqs_path)) then
     station_specials_reqs_file = file.contents(station_specials_reqs_path)
@@ -154,8 +156,8 @@ end
 log("STARTUP: Loading non-repetition requirements...")
 
 # This is your definition for what sorts of repetitions should be disallowed
-#   tag_name sets a metadata tag to check for repetition ("filename" isn't technically an ID3 tag but can be treated like one here)
-#   dont_repeat_within_last is one of a list of options for the period during which the tag should not be repeated:
+#   `tag_name` sets a metadata tag to check for repetition ("filename" isn't technically an ID3 tag but can be treated like one here)
+#   `dont_repeat_within_last` is one of a fixed list of options for the period during which the tag should not be repeated:
 #       track
 #       15 minutes
 #       hour
@@ -782,7 +784,6 @@ def is_request_approved(req) =
             true
         else
             next_request_metadata := request.metadata(req)
-
             #<
             md_for_log = next_request_metadata()
             # some raw dumping of specific fields
@@ -806,7 +807,7 @@ def is_request_approved(req) =
 
                 # classify the track no matter what, even if no speicials are overdue, to build up the cache if nothing else
                 classified_track_special_names := classify_track(next_request_metadata())
-                # log("This track matches specials: " ^ string(classified_track_special_names()))
+                # log("Track matches specials: " ^ string(classified_track_special_names()))
                 
                 if list.length(overdue_special_names()) > 0 and not list.exists(does_classified_track_include_special, overdue_special_names()) then
                     # try again...

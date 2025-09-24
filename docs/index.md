@@ -24,6 +24,7 @@ SM2 is fully **free and open source** under the MIT license. Enjoy!
 * Create shows from your music playlists of MP3 and other files
 * Define a 24/7 schedule of shows for your "DJs" to play
 * Automated DJ announcements using text-to-speech (currently Mac hosts only) or pre-recorded audio
+* Create requirements for the kinds of tracks you want to play every hour
 * Run multiple netradio streams simultaneously
 * Choose the bitrate of your streams
 * Telnet server to tell your DJ what to do *just like a real station manager*

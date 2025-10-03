@@ -84,6 +84,8 @@ station_telnet_server_netmask = stationconfig.telnet_server_netmask ?? "0.0.0.0"
 station_announcements_path = stationconfig.announcements_path ?? "announcements/"
 station_tts_announcements_path = stationconfig.tts_announcements_path ?? "/tmp/"
 
+station_trackcheck_timeout = stationconfig.trackcheck_timeout ?? 0.5
+
 # Logs setup
 if (station_log_path != "") then
     settings.log.file.path.set(station_log_path)
@@ -640,6 +642,7 @@ end
 # Keep track of some things *between calls* to is_request_approved, so we can be smarter when churning through request rejections
 last_current_track_checked = ref("")
 number_request_checks = ref(0)
+time_request_check_start = ref(0.0)
 
 # Called as source's check_next - decide if the next request should be played or not based on specials and repetition rules
 def is_request_approved(req) =
@@ -796,6 +799,7 @@ def is_request_approved(req) =
 
     # make sure specials state is correct before looking at anything else, but don't repeat this if we've already done it at this track change
     if number_request_checks() < 1 then
+        time_request_check_start := time() # start the clock on checks
         update_specials_and_last_played_state()
         # get list of the names of overdue requirements
         overdue_special_names := list.filter_map(return_special_name_if_overdue, specials_req_overdue_states())
@@ -813,8 +817,8 @@ def is_request_approved(req) =
     else
         # 1000 is somewhat arbitrary, but need to prevent infinite loops and not take *too* long on checks before giving up
         # TODO: maybe make this an optional config parameter with default of 1000
-        if number_request_checks() > 1000 then
-            log("APPROVED " ^ next_request_filename ^ " - 1000 tries failed to meet requirements, so accepting this track to move on!")
+        if time() > time_request_check_start() + station_trackcheck_timeout then
+            log("APPROVED " ^ next_request_filename ^ " - " ^ string(number_request_checks()) ^ " tries failed to meet requirements within " ^ string(station_trackcheck_timeout) ^ " seconds, so accepting this track to move on!")
             number_request_checks := 0
             true
         else

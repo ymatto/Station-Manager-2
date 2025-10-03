@@ -345,8 +345,27 @@ output.icecast(
 
 # METADATA FUNCTIONS, INCLUDING LOGGING
 
+# metadata cache, so we can delay resolving requests, and to avoid continually looking up metadata from files themselves unnecessarily
+track_metadata_cache = ref([]) # [("/music/playlist/01-trackname.mp3", [("artist", "Big Name"), ... ]), ...]
+
+# list of readable recent tracks to dump to log
 recent_tracks = ref ([])
 new_tracklog = ref ("")
+
+# Get metadata for a request, from cache if possible, resolved if necessary
+def get_metadata_for_request(this_request)
+    this_filename = request.uri(this_request)
+    cached_metadata = list.assoc(default=[("","")], this_filename, track_metadata_cache())
+    if ( cached_metadata != [("","")] ) then # already cached, return it
+        cached_metadata
+    else # gotta look it up and cache it for the future
+        ignore(request.resolve(this_request))
+        new_metadata = request.metadata(this_request)
+        # update cache
+        track_metadata_cache := list.append(track_metadata_cache(), [(this_filename, new_metadata)])
+        new_metadata
+    end
+end
 
 # Get a metadata tag's value, including dealing with weird ID3 ambiguities
 def get_metadata_value(this_tag, this_metadata)
@@ -626,8 +645,7 @@ number_request_checks = ref(0)
 def is_request_approved(req) =
 
     # Find out what the proposed request to play next is and consider its suitability
-    ignore(request.resolve(req))
-    next_request_filename = request.filename(req)
+    next_request_filename = request.uri(req)
     next_request_metadata = ref([]) # don't get it until we know it's a valid file
 
     # big function to see what specials state we'll be in, considering the currently playing track **at the time when it finishes**
@@ -800,7 +818,7 @@ def is_request_approved(req) =
             number_request_checks := 0
             true
         else
-            next_request_metadata := request.metadata(req)
+            next_request_metadata := get_metadata_for_request(req)
             #<
             md_for_log = next_request_metadata()
             # some raw dumping of specific fields

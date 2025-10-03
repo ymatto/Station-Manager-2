@@ -815,8 +815,7 @@ def is_request_approved(req) =
         # log("REJECTED - Hidden file - not a valid track!")
         false
     else
-        # 1000 is somewhat arbitrary, but need to prevent infinite loops and not take *too* long on checks before giving up
-        # TODO: maybe make this an optional config parameter with default of 1000
+        # If finding an approved track is taking too long, give up and move on to avoid latency problems
         if time() > time_request_check_start() + station_trackcheck_timeout then
             log("APPROVED " ^ next_request_filename ^ " - " ^ string(number_request_checks()) ^ " tries failed to meet requirements within " ^ string(station_trackcheck_timeout) ^ " seconds, so accepting this track to move on!")
             number_request_checks := 0

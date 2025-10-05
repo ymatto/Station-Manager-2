@@ -84,7 +84,7 @@ station_telnet_server_netmask = stationconfig.telnet_server_netmask ?? "0.0.0.0"
 station_announcements_path = stationconfig.announcements_path ?? "announcements/"
 station_tts_announcements_path = stationconfig.tts_announcements_path ?? "/tmp/"
 
-station_trackcheck_timeout = stationconfig.trackcheck_timeout ?? 0.5
+station_trackcheck_timeout = stationconfig.trackcheck_timeout ?? 2.0
 
 # Logs setup
 if (station_log_path != "") then

@@ -94,6 +94,9 @@ end
 settings.ffmpeg.log.verbosity.set("quiet")
 settings.ffmpeg.log.level := -8
 
+# Don't parse dumb ID3 tags that have image data and throw errors
+settings.request.metadata_decoders.recode.exclude := ["id3v2_priv.www.amazon.com", "priv", "apic", "pic", "metadata_block_picture", "coverart"]
+
 # Server setup
 if (station_telnet_server) then
     settings.server.telnet.set(station_telnet_server)
@@ -822,6 +825,7 @@ def is_request_approved(req) =
             true
         else
             next_request_metadata := get_metadata_for_request(req)
+
             #<
             md_for_log = next_request_metadata()
             # some raw dumping of specific fields
@@ -831,9 +835,9 @@ def is_request_approved(req) =
             log("ALBUM ARTIST: " ^ md_for_log["albumartist"])
             log("DATE:         " ^ md_for_log["date"])
             log("YEAR:         " ^ md_for_log["year"])
-            >#
             # of if you want to take a look at all metadata (incl. album art)... but it's a lot
-            # log(string(md_for_log)) 
+            # log(string(md_for_log))
+            >#
 
             # Reject if the track is a repetition that violates the stations rules
             all_repetition_rules_satisfied = list.for_all(is_nonrepetition_req_satisfied, station_nonrepetition_reqs())

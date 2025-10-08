@@ -1306,11 +1306,11 @@ server.register(namespace="dj",
 def station_get_specials(input_string) = 
     trimmed_input = string.trim(input_string)
     if trimmed_input == "this_hour" then
-        string(specials_plays_this_hour())
+        json.stringify(specials_plays_this_hour())
     elsif trimmed_input == "today" then
-        string(specials_plays_today())
+        json.stringify(specials_plays_today())
     elsif trimmed_input == "continuous" then
-        string(specials_plays_continuous())
+        json.stringify(specials_plays_continuous())
     else
         "ERROR invalid timeframe specified, choose one of: this_hour, today, or continuous"
     end
@@ -1318,7 +1318,7 @@ end
 
 server.register(namespace="station",
     usage="specials <this_hour|today|continuous>",
-    description="Returns an array of the specials that have played during the specified timeframe",
+    description="Returns a JSON array of the counts of specials that have played during the specified timeframe",
     "specials",
     station_get_specials)
 

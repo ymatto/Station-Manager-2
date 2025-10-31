@@ -1041,19 +1041,30 @@ def handle_track_end(this_metadata) =
     track_endtime := true # triggers the command_loop
 end
 
+# Keep each show's sources stored so they only have to be created once
+show_sources = ref ([]) # the playlist sources themselves, to be assigned to current_show_source
+show_output_sources = ref ([]) # sources with all of the additional hooks to be assigned to current_output_source
 
-def change_show(show_name) =
-    if (list.assoc(default="error", show_name, show_paths()) != "error") then
-        log("  --- New show starting: " ^ show_name ^ " ------------------------------------")
-    
-        show_path = list.assoc(default="error", show_name, show_paths())
-
-        # The check_next handler kicks off checking if the potentially-next track meets specified requirements
-        show_source = playlist(id="scheduled_show_playlist", check_next=is_request_approved, register_server_commands=false, show_path)
+def change_show(this_show_name) =
+    if (list.assoc(default="error", this_show_name, show_paths()) != "error") then
+        log("  --- New show starting: " ^ this_show_name ^ " ------------------------------------")
         
-        # TODO consider switching to on_track (rather than on_metadata), which might avoid bogus metadata... same arguments and everything, one-line change
-        show_source.on_metadata(synchronous=false, logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
-        current_show_source := show_source
+        # Get the playlist-based source used for control
+        if (list.assoc.mem(this_show_name, show_sources())) then
+            current_show_source := list.assoc(this_show_name, show_sources())
+        else
+            show_path = list.assoc(default=".", this_show_name, show_paths())
+
+            # The check_next handler kicks off checking if the potentially-next track meets specified requirements
+            show_source = playlist(id="scheduled_show_playlist", check_next=is_request_approved, register_server_commands=false, show_path)
+            # TODO consider switching to on_track (rather than on_metadata), which might avoid bogus metadata... same arguments and everything, one-line change
+            show_source.on_metadata(synchronous=false, logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
+
+            # save it for next time
+            show_sources := list.append([(this_show_name, show_source)], show_sources())
+
+            current_show_source := show_source  
+        end
     
         # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
 
@@ -1063,22 +1074,29 @@ def change_show(show_name) =
         # We can't let the new source start up with this "true" because it will be stuck that way (track end to reevaluate will never come)
         set_fadeout_trackend("false")
 
-        # Now create the new source for broadcast
-        show_source_with_switches = 
-            switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
-                switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
-                    show_source
-                ) ] )
-            ) ] )
-        show_source_with_switches.on_track(synchronous=true, handle_track_end)
-        new_output_source = smooth_add(duration=1.5, p=0.1, special=playover_source, normal=show_source_with_switches)
-
         # Set the source used by the dynamic broadcast source
-        current_output_source := new_output_source
+        if (list.assoc.mem(this_show_name, show_output_sources())) then
+            current_output_source := list.assoc(this_show_name, show_output_sources())
+        else
+            # Create the new source for broadcast
+            show_source_with_switches = 
+                switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
+                    switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
+                        current_show_source()
+                    ) ] )
+                ) ] )
+            show_source_with_switches.on_track(synchronous=true, handle_track_end)
+            output_source = smooth_add(duration=1.5, p=0.1, special=playover_source, normal=show_source_with_switches)
+
+            # save it for next time
+            show_output_sources := list.append([(this_show_name, output_source)], show_output_sources())
+
+            current_output_source := output_source
+        end
     
 
-        current_show_name := show_name
-        current_show_longname = list.assoc(default="", show_name, show_longnames())
+        current_show_name := this_show_name
+        current_show_longname = list.assoc(default="", this_show_name, show_longnames())
         set_voice("normal")
         ignore(
             file.write(
@@ -1088,7 +1106,7 @@ def change_show(show_name) =
                 )
         )
     else
-        log("No playlist path specified for requested show: " ^ show_name)
+        log("No playlist path specified for requested show: " ^ this_show_name)
     end
 
 end

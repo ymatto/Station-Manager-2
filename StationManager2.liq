@@ -1525,7 +1525,6 @@ def auto_dj_loop() =
                 log (" *** AUTO-DJ: Current track ends more than 10 minutes after the hour. ")
                 timed_enqueue(["set_pause_instant", "true"], 40.0)
                 timed_enqueue(["change_show", next_scheduled_show_name()], 43.0)
-                timed_enqueue(["set_pause_instant", "false"], 43.1)
                 current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
                 if (current_signoff_announcement != "") then
                     timed_enqueue(["say", current_signoff_announcement], 0.0)

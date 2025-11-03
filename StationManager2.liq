@@ -519,8 +519,8 @@ current_show_name = ref ("") # name of actual broadcasting show (independent of 
 current_show_source = ref (blank()) # the current show playlist source that can be monitored or controlled
 current_voice = ref ("") # name of current voice to use for synthesized DJ statements
 
-fadeout_trackend = ref (false)
-fadeout_instant = ref (false)
+pause_trackend = ref (false)
+pause_instant = ref (false)
 
 track_endtime = ref (false)
 
@@ -938,23 +938,23 @@ end
 
 # command-queueable functions
 
-def set_fadeout_trackend(arg) =
+def set_pause_trackend(arg) =
     if (arg == "true") then
-        fadeout_trackend := true
+        pause_trackend := true
     elsif (arg == "false") then
-        fadeout_trackend := false
+        pause_trackend := false
     else
-        log("Bad arg to set_fadeout_trackend")
+        log("Bad arg to set_pause_trackend")
     end
 end
 
-def set_fadeout_instant(arg) =
+def set_pause_instant(arg) =
     if (arg == "true") then
-        fadeout_instant := true
+        pause_instant := true
     elsif (arg == "false") then
-        fadeout_instant := false
+        pause_instant := false
     else
-        log("Bad arg to set_fadeout_instant")
+        log("Bad arg to set_pause_instant")
     end
 end
 
@@ -1036,6 +1036,10 @@ end
 # show management functions (plus change_show queueable command)
 
 def handle_track_end(this_metadata) =
+    if pause_trackend() == true then
+        set_pause_instant("true")
+        set_pause_trackend("false")
+    end
     ignore(this_metadata)
     log("  - track change signal -")
     track_endtime := true # triggers the command_loop
@@ -1044,6 +1048,8 @@ end
 # Keep each show's sources stored so they only have to be created once
 show_sources = ref ([]) # the playlist sources themselves, to be assigned to current_show_source
 show_output_sources = ref ([]) # sources with all of the additional hooks to be assigned to current_output_source
+
+enable_autocue_metadata()
 
 def change_show(this_show_name) =
     if (list.assoc(default="error", this_show_name, show_paths()) != "error") then
@@ -1067,23 +1073,22 @@ def change_show(this_show_name) =
         end
     
         # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
-
         # First, disconnect the current source from the dynamic source before doing some prep for the new show
         current_output_source := blank()
-
-        # We can't let the new source start up with this "true" because it will be stuck that way (track end to reevaluate will never come)
-        set_fadeout_trackend("false")
 
         # Set the source used by the dynamic broadcast source
         if (list.assoc.mem(this_show_name, show_output_sources())) then
             current_output_source := list.assoc(this_show_name, show_output_sources())
         else
             # Create the new source for broadcast
+            # NOTE: you can wrap this in a crossfade(), which works, but it seems to make on_track handling not possible
+            #    so if we want to do crossfading, we'll have to really change up some logic.
+            # ALSO NOTE: there used to be a track_sensitive pause here too, but this was a bad idea because switching to
+            #    blank meant that a track change would never happen again for that source, making it impossible to change
+            #    back to that show.
             show_source_with_switches = 
-                switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
-                    switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
-                        current_show_source()
-                    ) ] )
+                switch(id="pause_handler", track_sensitive=false, [ ({pause_instant() == true}, blank()), ({true},
+                    current_show_source()
                 ) ] )
             show_source_with_switches.on_track(synchronous=true, handle_track_end)
             output_source = smooth_add(duration=1.5, p=0.1, special=playover_source, normal=show_source_with_switches)
@@ -1093,7 +1098,8 @@ def change_show(this_show_name) =
 
             current_output_source := output_source
         end
-    
+        # make sure we start playing
+        set_pause_instant("false")
 
         current_show_name := this_show_name
         current_show_longname = list.assoc(default="", this_show_name, show_longnames())
@@ -1119,10 +1125,10 @@ def execute_a_command(command) =
     log("PROCESSING DJ COMMAND: " ^ command_name ^ " - with argument: " ^ command_arg)
     if (command_name == "change_show") then
         change_show(command_arg)
-    elsif (command_name == "set_fadeout_trackend") then
-        set_fadeout_trackend(command_arg)
-    elsif (command_name == "set_fadeout_instant") then
-        set_fadeout_instant(command_arg)
+    elsif (command_name == "set_pause_trackend") then
+        set_pause_trackend(command_arg)
+    elsif (command_name == "set_pause_instant") then
+        set_pause_instant(command_arg)
     elsif (command_name == "say") then
         say(command_arg)
     elsif (command_name == "set_voice") then
@@ -1298,8 +1304,8 @@ server.register(namespace="dj",
     description="Inserts a command into the DJ queue to be run at an optional delay time (s) from track's end\n" ^
                 "  Supported commands:\n" ^
                 "      change_show [show name]\n" ^
-                "      set_fadeout_trackend [true/false]\n" ^
-                "      set_fadeout_instant [true/false]\n" ^
+                "      set_pause_trackend [true/false]\n" ^
+                "      set_pause_instant [true/false]\n" ^
                 "      say [statement]\n" ^
                 "      set_voice [voice name]\n" ^
                 "      skip\n",
@@ -1311,8 +1317,8 @@ server.register(namespace="dj",
     description="Inserts a command into the DJ queue to be run after an optional delay time (s) from now\n" ^
                 "  Supported commands:\n" ^
                 "      change_show [show name]\n" ^
-                "      set_fadeout_trackend [true/false]\n" ^
-                "      set_fadeout_instant [true/false]\n" ^
+                "      set_pause_trackend [true/false]\n" ^
+                "      set_pause_instant [true/false]\n" ^
                 "      say [statement]\n" ^
                 "      set_voice [voice name]\n" ^
                 "      skip\n",
@@ -1494,7 +1500,7 @@ def auto_dj_loop() =
             # NOTE ideally this should be an == without the 100.0s slop, but I don't trust my float times
             if (next_scheduled_show_time() < up_next_hour_time + 100.0 and next_scheduled_show_name() != current_scheduled_show_name()) then
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
-                timed_enqueue(["set_fadeout_trackend", "true"], 0.0)
+                timed_enqueue(["set_pause_trackend", "true"], 0.0)
                 trackend_enqueue(["change_show", next_scheduled_show_name()], 3.0)
                 current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
                 if (current_signoff_announcement != "") then
@@ -1515,9 +1521,9 @@ def auto_dj_loop() =
             if (next_scheduled_show_time() < up_next_hour_time + 100.0 and next_scheduled_show_name() != current_scheduled_show_name()) then
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
                 log (" *** AUTO-DJ: Current track ends more than 10 minutes after the hour. ")
-                timed_enqueue(["set_fadeout_instant", "true"], 40.0)
+                timed_enqueue(["set_pause_instant", "true"], 40.0)
                 timed_enqueue(["change_show", next_scheduled_show_name()], 43.0)
-                timed_enqueue(["set_fadeout_instant", "false"], 43.1)
+                timed_enqueue(["set_pause_instant", "false"], 43.1)
                 current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
                 if (current_signoff_announcement != "") then
                     timed_enqueue(["say", current_signoff_announcement], 0.0)

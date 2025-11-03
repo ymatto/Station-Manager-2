@@ -1055,9 +1055,15 @@ def change_show(this_show_name) =
     if (list.assoc(default="error", this_show_name, show_paths()) != "error") then
         log("  --- New show starting: " ^ this_show_name ^ " ------------------------------------")
         
+        # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
+        # First, disconnect the current source from the dynamic source before doing some prep for the new show
+        current_output_source := blank()
+
         # Get the playlist-based source used for control
         if (list.assoc.mem(this_show_name, show_sources())) then
             current_show_source := list.assoc(this_show_name, show_sources())
+            # skip so the show doesn't start partway through a track
+            source.skip(current_show_source())
         else
             show_path = list.assoc(default=".", this_show_name, show_paths())
 
@@ -1071,10 +1077,6 @@ def change_show(this_show_name) =
 
             current_show_source := show_source  
         end
-    
-        # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
-        # First, disconnect the current source from the dynamic source before doing some prep for the new show
-        current_output_source := blank()
 
         # Set the source used by the dynamic broadcast source
         if (list.assoc.mem(this_show_name, show_output_sources())) then

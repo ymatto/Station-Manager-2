@@ -306,8 +306,11 @@ list.iter(get_showschedule, showschedule_list)
 
 log("STARTUP: setting up dynamic broadcast...")
 
+# Create a single blank source that we can use everywhere else, rather than constantly spinning out new blank sources
+silence = blank()
+
 # Create current_output_source. Changing source contents of this will change what is broadcast, using the dynamic broadcast_source
-current_output_source = ref(blank())
+current_output_source = ref(silence)
 
 # Handler to get the current dynamic source
 def get_source_for_broadcast() =
@@ -516,7 +519,7 @@ end
 # DJ CONTROL BOARD FUNCTIONS
 
 current_show_name = ref ("") # name of actual broadcasting show (independent of schedule - if there even is one)
-current_show_source = ref (blank()) # the current show playlist source that can be monitored or controlled
+current_show_source = ref (silence) # the current show playlist source that can be monitored or controlled
 current_voice = ref ("") # name of current voice to use for synthesized DJ statements
 
 pause_trackend = ref (false)
@@ -1049,7 +1052,6 @@ end
 show_sources = ref ([]) # the playlist sources themselves, to be assigned to current_show_source
 show_output_sources = ref ([]) # sources with all of the additional hooks to be assigned to current_output_source
 
-enable_autocue_metadata()
 
 def change_show(this_show_name) =
     if (list.assoc(default="error", this_show_name, show_paths()) != "error") then
@@ -1057,7 +1059,7 @@ def change_show(this_show_name) =
         
         # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
         # First, disconnect the current source from the dynamic source before doing some prep for the new show
-        current_output_source := blank()
+        current_output_source := silence
 
         # Get the playlist-based source used for control
         if (list.assoc.mem(this_show_name, show_sources())) then
@@ -1089,7 +1091,7 @@ def change_show(this_show_name) =
             #    blank meant that a track change would never happen again for that source, making it impossible to change
             #    back to that show.
             show_source_with_switches = 
-                switch(id="pause_handler", track_sensitive=false, [ ({pause_instant() == true}, blank()), ({true},
+                switch(id="pause_handler", track_sensitive=false, [ ({pause_instant() == true}, silence), ({true},
                     current_show_source()
                 ) ] )
             show_source_with_switches.on_track(synchronous=true, handle_track_end)
@@ -1503,7 +1505,7 @@ def auto_dj_loop() =
             if (next_scheduled_show_time() < up_next_hour_time + 100.0 and next_scheduled_show_name() != current_scheduled_show_name()) then
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
                 timed_enqueue(["set_pause_trackend", "true"], 0.0)
-                trackend_enqueue(["change_show", next_scheduled_show_name()], 3.0)
+                trackend_enqueue(["change_show", next_scheduled_show_name()], 2.0)
                 current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
                 if (current_signoff_announcement != "") then
                     pre_trackend_enqueue(["say", current_signoff_announcement], 40.0)
@@ -1524,14 +1526,14 @@ def auto_dj_loop() =
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
                 log (" *** AUTO-DJ: Current track ends more than 10 minutes after the hour. ")
                 timed_enqueue(["set_pause_instant", "true"], 40.0)
-                timed_enqueue(["change_show", next_scheduled_show_name()], 43.0)
+                timed_enqueue(["change_show", next_scheduled_show_name()], 42.0)
                 current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
                 if (current_signoff_announcement != "") then
                     timed_enqueue(["say", current_signoff_announcement], 0.0)
                 end
                 next_signon_announcement = list.assoc(default=station_id_announcement, next_scheduled_show_name(), show_signon_announcements())
                 if (next_signon_announcement != "") then
-                    timed_enqueue(["say", next_signon_announcement], 63.0)
+                    timed_enqueue(["say", next_signon_announcement], 62.0)
                 end
             else # no scheduled show switch this hour, so see about doing a station ID right around the hour
                 if (station_id_announcement != "") then

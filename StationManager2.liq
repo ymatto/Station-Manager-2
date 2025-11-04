@@ -94,8 +94,8 @@ end
 settings.ffmpeg.log.verbosity.set("quiet")
 settings.ffmpeg.log.level := -8
 
-# Don't parse dumb ID3 tags that have image data and throw errors
-settings.request.metadata_decoders.recode.exclude := ["id3v2_priv.www.amazon.com", "priv", "apic", "pic", "metadata_block_picture", "coverart"]
+# Don't parse ID3 tags that have image or other large data, causing warnings about "string over max length" to be thrown
+settings.request.metadata_decoders.recode.exclude := ["id3v2_priv.www.amazon.com", "priv", "apic", "pic", "metadata_block_picture", "coverart", "lyrics", "unsyncedlyrics"]
 
 # Server setup
 if (station_telnet_server) then

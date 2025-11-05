@@ -654,6 +654,7 @@ number_request_checks = ref(0)
 time_request_check_start = ref(0.0)
 
 # Called as source's check_next - decide if the next request should be played or not based on specials and repetition rules
+# TODO - Can this be made even more efficient, to incur less latency?
 def is_request_approved(req) =
 
     # Find out what the proposed request to play next is and consider its suitability

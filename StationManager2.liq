@@ -428,7 +428,9 @@ def logtrack(this_metadata) =
         artist = get_metadata_value("artist", this_metadata)
         album = get_metadata_value("album", this_metadata)
         title = get_metadata_value("title", this_metadata)
+        filename = get_metadata_value("filename", this_metadata)
         newline="#{artist} - #{album} - #{title}"
+        log("PLAYING: " ^ newline ^ " (" ^ filename ^ ")")
         recent_tracks := list.add(newline, recent_tracks())
         if (list.length(recent_tracks()) > 20) then
             recent_tracks := list.rev(list.tl(list.rev(recent_tracks())))
@@ -662,7 +664,7 @@ def is_request_approved(req) =
     next_request_metadata = ref([]) # don't get it until we know it's a valid file
 
     # big function to see what specials state we'll be in, considering the currently playing track **at the time when it finishes**
-    # intended to be called just after a track has started playing, although it does avoid redundant tallying if called more than once during a track
+    # intended to be called just after a track has started playing, avoids redundant tallying if called more than once during a track
     def update_specials_and_last_played_state()
         # get the playing track (likely just started as the next playlist request)
         current_track_metadata = current_show_source().last_metadata() ?? []
@@ -962,6 +964,7 @@ def set_pause_instant(arg) =
     end
 end
 
+# a source that will be immediately smooth_add'ed into whatever is playing, whenever there is a request (like an announcement)
 playover_source = request.queue(id="playover_source") # removed audio_to_stereo at v2.0
 
 def set_voice(voicename) =
@@ -978,7 +981,6 @@ def set_voice(voicename) =
     current_voice := newvoice()
     log("   New voice selected: " ^ newvoice())
 end
-
 
 def playover(file_path) =
     # Queue up the speech along with some bookending silence
@@ -1036,17 +1038,26 @@ def skip () =
     log("Skipping to next track in playlist!")
 end
 
+# TEMP working here
+
+# a source that will play at the end of the current track, regardless of what the playlist is doing
+request_injection_source = request.queue(id="playover_source") # removed audio_to_stereo at v2.0
+
+def inject_request () =
+    request_injection_source.push(request.create("synth:shape=sine,frequency=100.0,duration=30"))
+end
+
+
 
 # show management functions (plus change_show queueable command)
 
-def handle_track_end(this_metadata) =
+def handle_track_end (this_metadata) =
     if pause_trackend() == true then
         set_pause_instant("true")
         set_pause_trackend("false")
     end
-    ignore(this_metadata)
-    log("  - track change signal -")
-    track_endtime := true # triggers the command_loop
+    track_endtime := true # trigger the command_loop to do track end things
+    logtrack(this_metadata)
 end
 
 # Keep each show's sources stored so they only have to be created once
@@ -1071,9 +1082,11 @@ def change_show(this_show_name) =
             show_path = list.assoc(default=".", this_show_name, show_paths())
 
             # The check_next handler kicks off checking if the potentially-next track meets specified requirements
-            show_source = playlist(id="scheduled_show_playlist", check_next=is_request_approved, register_server_commands=false, show_path)
-            # TODO consider switching to on_track (rather than on_metadata), which might avoid bogus metadata... same arguments and everything, one-line change
-            show_source.on_metadata(synchronous=false, logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
+            show_source = fallback(id="injectable_scheduled_show_playlist", track_sensitive=true,
+                    [request_injection_source,
+                    playlist(id="scheduled_show_playlist", check_next=is_request_approved, register_server_commands=false, show_path)]
+                )
+            show_source.on_track(synchronous=false, handle_track_end)
 
             # save it for next time
             show_sources := list.append([(this_show_name, show_source)], show_sources())
@@ -1095,7 +1108,8 @@ def change_show(this_show_name) =
                 switch(id="pause_handler", track_sensitive=false, [ ({pause_instant() == true}, silence), ({true},
                     current_show_source()
                 ) ] )
-            show_source_with_switches.on_track(synchronous=true, handle_track_end)
+            # TEMP remove next line if all working well
+            # show_source_with_switches.on_track(synchronous=true, handle_track_end)
             output_source = smooth_add(duration=1.5, p=0.1, special=playover_source, normal=show_source_with_switches)
 
             # save it for next time
@@ -1351,6 +1365,14 @@ server.register(namespace="station",
     "specials",
     station_get_specials)
 
+# TEMP FOR TESTING
+
+def inject_silence(input_string) =
+    inject_request()
+    "Okay"
+end
+
+server.register(namespace="station", "try", inject_silence)
 
 
                 

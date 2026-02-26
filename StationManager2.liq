@@ -422,8 +422,11 @@ def addtotracklog(nexttrack) =
   new_tracklog := string.concat([new_tracklog(), nexttrack, "\n"])
 end
 
+# TODO
+# change this to just take a string to add to the log
+# move the other logic to the trackend handler
+# and add a check to not bother logging if data is blank or "-" or whatever
 def logtrack(this_metadata) =
-    # TODO (maybe, if still relevant) don't log if the info is blank or "-" or whatever at show changes
     if (station_tracklog_path != "") then
         artist = get_metadata_value("artist", this_metadata)
         album = get_metadata_value("album", this_metadata)
@@ -1038,6 +1041,7 @@ def skip () =
     log("Skipping to next track in playlist!")
 end
 
+
 # TEMP working here
 
 # a source that will play at the end of the current track, regardless of what the playlist is doing
@@ -1108,8 +1112,6 @@ def change_show(this_show_name) =
                 switch(id="pause_handler", track_sensitive=false, [ ({pause_instant() == true}, silence), ({true},
                     current_show_source()
                 ) ] )
-            # TEMP remove next line if all working well
-            # show_source_with_switches.on_track(synchronous=true, handle_track_end)
             output_source = smooth_add(duration=1.5, p=0.1, special=playover_source, normal=show_source_with_switches)
 
             # save it for next time

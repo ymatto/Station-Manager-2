@@ -1133,7 +1133,7 @@ def change_show(this_show_name) =
     else
         log("No playlist path specified for requested show: " ^ this_show_name)
     end
-    
+
     # make sure we start playing, regardless of if the show actually switched or not
     set_pause_instant("false")
 
@@ -1532,6 +1532,8 @@ def auto_dj_loop() =
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
                 timed_enqueue(["set_pause_trackend", "true"], 0.0)
                 trackend_enqueue(["change_show", next_scheduled_show_name()], 2.0)
+                # this shouldn't strictly be necessary, with change_show unpausing itself, but just to be sure...
+                trackend_enqueue(["set_pause_instant", "false"], 3.0)
                 current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
                 if (current_signoff_announcement != "") then
                     pre_trackend_enqueue(["say", current_signoff_announcement], 40.0)
@@ -1553,6 +1555,8 @@ def auto_dj_loop() =
                 log (" *** AUTO-DJ: Current track ends more than 10 minutes after the hour. ")
                 timed_enqueue(["set_pause_instant", "true"], 40.0)
                 timed_enqueue(["change_show", next_scheduled_show_name()], 42.0)
+                # this shouldn't strictly be necessary, with change_show unpausing itself, but just to be sure...
+                timed_enqueue(["set_pause_instant", "false"], 43.0)
                 current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
                 if (current_signoff_announcement != "") then
                     timed_enqueue(["say", current_signoff_announcement], 0.0)

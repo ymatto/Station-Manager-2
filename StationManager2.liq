@@ -1119,8 +1119,6 @@ def change_show(this_show_name) =
 
             current_output_source := output_source
         end
-        # make sure we start playing
-        set_pause_instant("false")
 
         current_show_name := this_show_name
         current_show_longname = list.assoc(default="", this_show_name, show_longnames())
@@ -1135,6 +1133,9 @@ def change_show(this_show_name) =
     else
         log("No playlist path specified for requested show: " ^ this_show_name)
     end
+    
+    # make sure we start playing, regardless of if the show actually switched or not
+    set_pause_instant("false")
 
 end
 

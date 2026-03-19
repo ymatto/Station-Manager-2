@@ -702,7 +702,7 @@ def is_request_approved(req) =
             hour_of_track_end = time.local(time_at_track_end).hour
             day_of_track_end = time.local(time_at_track_end).day
             if specials_hour() != hour_of_track_end then
-                log("Next track will start in a new hour of specials!")
+                log("This track will start in a new hour of specials!")
                 specials_req_overdue_states := []
                 specials_plays_this_hour := []
                 specials_hour := hour_of_track_end
@@ -711,7 +711,7 @@ def is_request_approved(req) =
                 top_of_hour_play := false
             end
             if specials_day() != day_of_track_end then
-                log("Next track will start in a new day!\nTotal specials plays today: " ^ string(specials_plays_today()) ^ "\nSpecials plays since launch: " ^ string(specials_plays_continuous()))
+                log("This track will start in a new day!\nTotal specials plays today: " ^ string(specials_plays_today()) ^ "\nSpecials plays since launch: " ^ string(specials_plays_continuous()))
                 specials_plays_today := []
                 specials_day := day_of_track_end
             end

@@ -672,8 +672,10 @@ def is_request_approved(req) =
     def update_specials_and_last_played_state()
         # get the playing track (likely just started as the next playlist request)
         current_track_metadata = current_show_source().last_metadata() ?? []
-        current_track_remaining = source.remaining(current_show_source())
+        current_track_remaining = current_show_source().remaining()
         current_track_filename = current_track_metadata["filename"]
+        # TEMP
+        log("Updating with:  " ^ string(current_track_filename) ^ " with remaining time " ^ string(current_track_remaining))
 
         top_of_hour_play = ref(false)
 
@@ -825,6 +827,8 @@ def is_request_approved(req) =
 
     # make sure specials state is correct before looking at anything else, but don't repeat this if we've already done it at this track change
     if number_request_checks() < 1 then
+        # NOTE - This pause is annoying, but a better solution requires keeping track of metadata ourselves in a way that seems maybe even more error prone
+        thread.pause(0.1) # pause for a moment to make sure metadata of the newly-playing track is available on last_metadata
         time_request_check_start := time() # start the clock on checks
         update_specials_and_last_played_state()
         # get list of the names of overdue requirements
@@ -1058,7 +1062,7 @@ def handle_track_end (this_metadata) =
         set_pause_instant("true")
         set_pause_trackend("false")
     end
-    track_endtime := true # trigger the command_loop to do track end things
+    track_endtime := true # tell the command_loop to do track end things
     logtrack(this_metadata)
 end
 

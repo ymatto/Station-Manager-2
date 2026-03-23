@@ -2,10 +2,13 @@
 # If not running this from the commandline (such as launchd), make sure to include '--' before the configuration file argument
 # ie.: /Users/omm/Basscadet/StationManager2.liq -- stationconfig.json
 
+# Designed to run with Liquidsoap v2.4
+
+
 #<
 MIT License
 
-Copyright (c) 2025 Matthew Hine
+Copyright (c) 2026 Matthew Hine
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -25,8 +28,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 >#
-
-# Designed to run with Liquidsoap v2.4
 
 
 
@@ -920,7 +921,7 @@ end
 
 def timed_enqueue(command, exec_delay) = # command (list), exec_delay (float, seconds)
     now = time()
-    command_time = now + exec_delay # needs to be ref to be visible within func below?
+    command_time = now + exec_delay
     log("Timed DJ command received:         " ^ string(command) ^ " with execution set to " ^ string(exec_delay) ^ " seconds from now")
     command_pair = [(command, command_time)] # timed queue uses absolute times for execution
     timed_command_queue := list.append(timed_command_queue(), command_pair)
@@ -945,7 +946,7 @@ def pre_trackend_enqueue(command, exec_delay) =
     # log("pre-trackend command queue now: " ^ string(pre_trackend_command_queue()))
 end
 
-# command-queueable functions
+# Command-queueable functions
 
 def set_pause_trackend(arg) =
     if (arg == "true") then
@@ -1053,7 +1054,7 @@ end
 
 
 
-# show management functions (plus change_show queueable command)
+# Show management functions (plus change_show queueable command)
 
 def handle_track_end (this_metadata) =
     if pause_trackend() == true then
@@ -1064,7 +1065,7 @@ def handle_track_end (this_metadata) =
     logtrack(this_metadata)
 end
 
-# Keep each show's sources stored so they only have to be created once
+# keep each show's sources stored so they only have to be created once
 show_sources = ref ([]) # the playlist sources themselves, to be assigned to current_show_source
 show_output_sources = ref ([]) # sources with all of the additional hooks to be assigned to current_output_source
 
@@ -1139,7 +1140,7 @@ def change_show(this_show_name) =
 
 end
 
-# queue execution functions
+# Command queue execution functions
 
 def execute_a_command(command) =
     command_name = list.hd(default="", command)

@@ -1244,11 +1244,11 @@ def command_loop() =
     if (now >= next_timed_command_time and next_timed_command_time != 0.0) then
         process_timed_command_queue()
     end
-    0.1
+    0.2
 end
 
 # kick off recurring command_loop processing
-thread.run.recurrent(delay=0.1, command_loop)
+thread.run.recurrent(delay=0.2, command_loop)
 
 
 # Single external receiver of new command requests to add to the queue

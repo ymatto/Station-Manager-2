@@ -922,7 +922,6 @@ end
 def timed_enqueue(command, exec_delay) = # command (list), exec_delay (float, seconds)
     now = time()
     command_time = now + exec_delay
-    log("Timed DJ command received:         " ^ string(command) ^ " with execution set to " ^ string(exec_delay) ^ " seconds from now")
     command_pair = [(command, command_time)] # timed queue uses absolute times for execution
     timed_command_queue := list.append(timed_command_queue(), command_pair)
     # now sort it by time (least first) so we can just check the head of the list in the command loop
@@ -931,14 +930,12 @@ def timed_enqueue(command, exec_delay) = # command (list), exec_delay (float, se
 end
 
 def trackend_enqueue(command, exec_delay) =
-    log("Trackend DJ command received:      " ^ string(command) ^ " with execution delay: " ^ string(exec_delay) ^ " after end of this track")
     command_pair = [(command, exec_delay)] # trackend queue uses a delay, all of which can be turned into fixed timed_enqueue requests at track end
     trackend_command_queue := list.append(trackend_command_queue(), command_pair)
     # log("trackend command queue now: " ^ string(trackend_command_queue()))
 end
 
 def pre_trackend_enqueue(command, exec_delay) =
-    log("Pre-trackend DJ command received:  " ^ string(command) ^ " with execution time: " ^ string(exec_delay) ^ " before end of this track")
     command_pair = [(command, exec_delay)]
     pre_trackend_command_queue := list.append(pre_trackend_command_queue(), command_pair)
     # now sort it by pre-trackend delay (largest first) so we can just check the head of the list in the command loop
@@ -1250,9 +1247,28 @@ def command_loop() =
     0.1
 end
 
+# kick off recurring command_loop processing
 thread.run.recurrent(delay=0.1, command_loop)
 
 
+# Single external receiver of new command requests to add to the queue
+def request_command(command, exec_delay, timing_type) = 
+    # before adding any new commands, run the command_loop manually to make sure existing commands are handled properly
+    # particularly trackend handling - previously there was a race condition issue when command_loop lagged new commands added to queue
+    ignore(command_loop())
+    if (timing_type == "timed") then
+        log("Timed command received:         " ^ string(command) ^ " with execution set to " ^ string(exec_delay) ^ " seconds from now")
+        timed_enqueue(command, exec_delay)
+    elsif (timing_type == "trackend") then
+        log("Trackend command received:      " ^ string(command) ^ " with execution delay: " ^ string(exec_delay) ^ " after end of this track")
+        trackend_enqueue(command, exec_delay)
+    elsif (timing_type == "pre_trackend") then
+        log("Pre-trackend command received:  " ^ string(command) ^ " with execution time: " ^ string(exec_delay) ^ " before end of this track")
+        pre_trackend_enqueue(command, exec_delay)
+    else
+        log("Command ignored: Timing type " ^ string(timing_type) ^ " for " ^ string(command) ^ " command not recognized")
+    end
+end
 
 
 
@@ -1283,9 +1299,9 @@ def dj_trackend_enqueue(input_string) =
             command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
         end
         if (command_time() >= 0.0) then
-            trackend_enqueue([command_name(), command_arg()], command_time())
+            request_command([command_name(), command_arg()], command_time(), "trackend")
         else
-            pre_trackend_enqueue([command_name(), command_arg()], 0.0-command_time())
+            request_command([command_name(), command_arg()], 0.0-command_time(), "pre_trackend")
         end
         "Done"
     else
@@ -1315,7 +1331,7 @@ def dj_timed_enqueue(input_string) =
             # command_arg is everything after command (at start)
             command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
         end
-        timed_enqueue([command_name(), command_arg()], command_time())
+        request_command([command_name(), command_arg()], command_time(), "timed")
         "Done"
     else
         "No DJ command provided"
@@ -1514,7 +1530,7 @@ def auto_dj_loop() =
     if (current_show_name() == "") then
         update_current_next_shows() # figure out what's supposed to be going on
         log(" *** AUTO-DJ: Starting up with... " ^ current_scheduled_show_name())
-        timed_enqueue(["change_show", current_scheduled_show_name()], 0.0)
+        request_command(["change_show", current_scheduled_show_name()], 0.0, "timed")
         last_handled_hour_time := today_start_time + (float_of_int(this_hour) * 3600.0)
     end
     up_next_hour_time = last_handled_hour_time() + 3600.0
@@ -1531,22 +1547,22 @@ def auto_dj_loop() =
             # NOTE ideally this should be an == without the 100.0s slop, but I don't trust my float times
             if (next_scheduled_show_time() < up_next_hour_time + 100.0 and next_scheduled_show_name() != current_scheduled_show_name()) then
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
-                timed_enqueue(["set_pause_trackend", "true"], 0.0)
-                trackend_enqueue(["change_show", next_scheduled_show_name()], 2.0)
+                request_command(["set_pause_trackend", "true"], 0.0, "timed")
+                request_command(["change_show", next_scheduled_show_name()], 2.0, "trackend")
                 # this shouldn't strictly be necessary, with change_show unpausing itself, but just to be sure...
-                trackend_enqueue(["set_pause_instant", "false"], 3.0)
+                request_command(["set_pause_instant", "false"], 3.0, "trackend")
                 current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
                 if (current_signoff_announcement != "") then
-                    pre_trackend_enqueue(["say", current_signoff_announcement], 40.0)
+                    request_command(["say", current_signoff_announcement], 40.0, "pre_trackend")
                 end
                 next_signon_announcement = list.assoc(default=station_id_announcement, next_scheduled_show_name(), show_signon_announcements())
                 if (next_signon_announcement != "") then
-                    trackend_enqueue(["say", next_signon_announcement], 13.0)
+                    request_command(["say", next_signon_announcement], 13.0, "trackend")
                 end
             else # no scheduled show switch this hour, so see about doing a station ID
                 if (station_id_announcement != "") then
                     log(" *** AUTO-DJ: Time for a station ID announcement.")
-                    pre_trackend_enqueue(["say", station_id_announcement], 12.0)
+                    request_command(["say", station_id_announcement], 12.0, "pre_trackend")
                 end
             end
         else # it's time to go but the current track ends 10 minutes after the hour, so just do it without waiting for track end.
@@ -1554,22 +1570,22 @@ def auto_dj_loop() =
             if (next_scheduled_show_time() < up_next_hour_time + 100.0 and next_scheduled_show_name() != current_scheduled_show_name()) then
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
                 log (" *** AUTO-DJ: Current track ends more than 10 minutes after the hour. ")
-                timed_enqueue(["set_pause_instant", "true"], 40.0)
-                timed_enqueue(["change_show", next_scheduled_show_name()], 42.0)
+                request_command(["set_pause_instant", "true"], 40.0, "timed")
+                request_command(["change_show", next_scheduled_show_name()], 42.0, "timed")
                 # this shouldn't strictly be necessary, with change_show unpausing itself, but just to be sure...
-                timed_enqueue(["set_pause_instant", "false"], 43.0)
+                request_command(["set_pause_instant", "false"], 43.0, "timed")
                 current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
                 if (current_signoff_announcement != "") then
-                    timed_enqueue(["say", current_signoff_announcement], 0.0)
+                    request_command(["say", current_signoff_announcement], 0.0, "timed")
                 end
                 next_signon_announcement = list.assoc(default=station_id_announcement, next_scheduled_show_name(), show_signon_announcements())
                 if (next_signon_announcement != "") then
-                    timed_enqueue(["say", next_signon_announcement], 62.0)
+                    request_command(["say", next_signon_announcement], 62.0, "timed")
                 end
             else # no scheduled show switch this hour, so see about doing a station ID right around the hour
                 if (station_id_announcement != "") then
                     log(" *** AUTO-DJ: Time for a station ID announcement.")
-                    timed_enqueue(["say", station_id_announcement], 60.0)
+                    request_command(["say", station_id_announcement], 60.0, "timed")
                 end
             end
         end

@@ -433,21 +433,25 @@ def logtrack(this_metadata) =
         album = get_metadata_value("album", this_metadata)
         title = get_metadata_value("title", this_metadata)
         filename = get_metadata_value("filename", this_metadata)
-        newline="#{artist} - #{album} - #{title}"
-        log("PLAYING: " ^ newline ^ " (" ^ filename ^ ")")
-        recent_tracks := list.add(newline, recent_tracks())
-        if (list.length(recent_tracks()) > 20) then
-            recent_tracks := list.rev(list.tl(list.rev(recent_tracks())))
-        end
-        new_tracklog := ""
-        list.iter(addtotracklog, recent_tracks())
-        ignore(
-            file.write(
-                data=new_tracklog(),
-                append=false,
-                station_tracklog_path
+        if (title == "") then
+            log ("PLAYING: file without metadata")
+        else
+            newline="#{artist} - #{album} - #{title}"    
+            log("PLAYING: " ^ newline ^ " (" ^ filename ^ ")")       
+            recent_tracks := list.add(newline, recent_tracks())
+            if (list.length(recent_tracks()) > 20) then
+                recent_tracks := list.rev(list.tl(list.rev(recent_tracks())))
+            end
+            new_tracklog := ""
+            list.iter(addtotracklog, recent_tracks())
+            ignore(
+                file.write(
+                    data=new_tracklog(),
+                    append=false,
+                    station_tracklog_path
+                )
             )
-        )
+        end
     end
 end
 
@@ -663,8 +667,7 @@ def update_specials_and_last_played_state()
     current_track_metadata = current_show_source().last_metadata() ?? []
     current_track_remaining = current_show_source().remaining()
     current_track_filename = current_track_metadata["filename"]
-    # TEMP
-    log("Updating with:  " ^ string(current_track_filename) ^ " with remaining time " ^ string(current_track_remaining))
+    # log("Updating specials status with:  " ^ string(current_track_filename) ^ " with remaining time " ^ string(current_track_remaining))
 
     top_of_hour_play = ref(false)
 
@@ -1107,7 +1110,7 @@ def change_show(this_show_name) =
         # Get the playlist-based source used for control
         if (list.assoc.mem(this_show_name, show_sources())) then
             current_show_source := list.assoc(this_show_name, show_sources())
-            # skip so the show doesn't start partway through a track
+            # skip so the show doesn't start partway through a track, won't be audible because we haven't made it active yet
             source.skip(current_show_source())
         else
             show_path = list.assoc(default=".", this_show_name, show_paths())
@@ -1310,97 +1313,111 @@ end
 
 # SERVER FUNCTIONS
 
-# commands for auto DJ
+# Commands for auto DJ queue
 
-def dj_trackend_enqueue(input_string) =
-    trimmed_input = string.trim(input_string)
+# common handler for different variations of DJ command requests
+def request_command_from_string(input_string, request_type) = 
     command_name = ref ("")
     command_arg = ref ("")
     command_time = ref (0.0)
+
+    trimmed_input = string.trim(input_string)
     input_list = string.split(separator=" ", trimmed_input)
     input_list_length = list.length(input_list)
     input_length = string.length(trimmed_input)
-    if (input_list_length > 0) then
-        command_name := list.nth(default="", input_list, 0)
-        last_input = list.nth(default="", input_list, input_list_length-1)
-        last_input_as_float = float_of_string(default=0.8686, last_input) # hack to just check if there's a float there or not while allowing positive or negative input
-        command_name_length = string.length(command_name())
-        if (last_input_as_float != 0.8686) then # float found, so user provided a delay to be used rather than default
-            command_time := last_input_as_float
-            command_time_length = string.length(last_input)
-            # command_arg is everything between command (at start) and time (at end)
-            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
-        else
-            # command_arg is everything after command (at start)
-            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
-        end
-        if (command_time() >= 0.0) then
-            request_command([command_name(), command_arg()], command_time(), "trackend")
-        else
-            request_command([command_name(), command_arg()], 0.0-command_time(), "pre_trackend")
-        end
-        "Done"
-    else
+
+    if (input_list_length < 1) then
         "No DJ command provided"
+    else
+        command_name := list.nth(default="", input_list, 0)
+        command_name_length = string.length(command_name())
+        if (request_type == "now") then
+            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
+            request_command([command_name(), command_arg()], 0.0, "timed")
+            "Done"
+        elsif (request_type == "trackend") then
+            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
+            request_command([command_name(), command_arg()], 0.0, "trackend")
+            "Done"           
+        else
+            last_input = list.nth(default="", input_list, input_list_length-1)
+            last_input_as_float = float_of_string(default=-1.0, last_input)
+            if (last_input_as_float >= 0.0) then
+                command_time := last_input_as_float
+                command_time_length = string.length(last_input)
+                if (request_type == "delayed") then
+                    command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
+                    request_command([command_name(), command_arg()], command_time(), "timed")
+                    "Done"
+                elsif (request_type == "trackend_delayed") then
+                    command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
+                    request_command([command_name(), command_arg()], command_time(), "trackend")
+                    "Done"               
+                else
+                    "Invalid request type provided"
+                end
+            else
+                "Invalid delay in seconds provided"
+            end
+        end
     end
 end
 
-def dj_timed_enqueue(input_string) =
-    trimmed_input = string.trim(input_string)
-    command_name = ref ("")
-    command_arg = ref ("")
-    command_time = ref (0.0)
-    input_list = string.split(separator=" ", trimmed_input)
-    input_list_length = list.length(input_list)
-    input_length = string.length(trimmed_input)
-    if (input_list_length > 0) then
-        command_name := list.nth(default="", input_list, 0)
-        last_input = list.nth(default="", input_list, input_list_length-1)
-        last_input_as_float = float_of_string(default=-1.0, last_input)
-        command_name_length = string.length(command_name())
-        if (last_input_as_float >= 0.0) then
-            command_time := last_input_as_float
-            command_time_length = string.length(last_input)
-            # command_arg is everything between command (at start) and time (at end)
-            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
-        else
-            # command_arg is everything after command (at start)
-            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
-        end
-        request_command([command_name(), command_arg()], command_time(), "timed")
-        "Done"
-    else
-        "No DJ command provided"
-    end
+
+def dj_now_handler(input_string) = 
+    request_command_from_string(input_string, "now")
 end
+
+def dj_trackend_handler(input_string) =
+    request_command_from_string(input_string, "trackend")
+end
+
+def dj_delayed_handler(input_string) =
+    request_command_from_string(input_string, "delayed")
+end
+
+def dj_trackend_delayed_handler(input_string) =
+    request_command_from_string(input_string, "trackend_delayed")
+end
+
+
+dj_command_list =   "  Supported commands:\n" ^
+                    "      change_show [show name]\n" ^
+                    "      set_pause_trackend [true/false]\n" ^
+                    "      set_pause_instant [true/false]\n" ^
+                    "      say [statement]\n" ^
+                    "      set_voice [voice name]\n" ^
+                    "      skip\n" ^
+                    "      rewind\n" ^
+                    "      enqueue_silence [silence time in seconds]\n" ^
+                    "      enqueue_track [server file path to track]\n"
 
 server.register(namespace="dj",
-    usage="trackend <command> [<argument>] [<time>]",
-    description="Inserts a command into the DJ queue to be run at an optional delay time (s) from track's end\n" ^
-                "  Supported commands:\n" ^
-                "      change_show [show name]\n" ^
-                "      set_pause_trackend [true/false]\n" ^
-                "      set_pause_instant [true/false]\n" ^
-                "      say [statement]\n" ^
-                "      set_voice [voice name]\n" ^
-                "      skip\n",
+    usage="now <command> [<argument>]",
+    description="Inserts a command into the DJ queue to be run right away\n" ^ dj_command_list,
+    "now",
+    dj_now_handler)
+
+server.register(namespace="dj",
+    usage="trackend <command> [<argument>]",
+    description="Inserts a command into the DJ queue to be run at current track's end\n" ^ dj_command_list,
     "trackend",
-    dj_trackend_enqueue)
+    dj_trackend_handler)
 
 server.register(namespace="dj",
     usage="now <command> [<argument>] [<time>]",
-    description="Inserts a command into the DJ queue to be run after an optional delay time (s) from now\n" ^
-                "  Supported commands:\n" ^
-                "      change_show [show name]\n" ^
-                "      set_pause_trackend [true/false]\n" ^
-                "      set_pause_instant [true/false]\n" ^
-                "      say [statement]\n" ^
-                "      set_voice [voice name]\n" ^
-                "      skip\n",
-    "now",
-    dj_timed_enqueue)
+    description="Inserts a command into the DJ queue to be run after an optional delay time (s) from now\n" ^ dj_command_list,
+    "delayed",
+    dj_delayed_handler)
 
-# commands for station control board
+server.register(namespace="dj",
+    usage="trackend_delayed <command> [<argument>] [<time>]",
+    description="Inserts a command into the DJ queue to be run at an optional delay time (s) from track's end\n" ^ dj_command_list,
+    "trackend_delayed",
+    dj_trackend_delayed_handler)
+
+
+# Commands for station control board
 
 def station_get_specials(input_string) = 
     trimmed_input = string.trim(input_string)
@@ -1579,7 +1596,7 @@ def auto_dj_loop() =
                 if (current_signoff_announcement != "") then
                     request_command(["say", current_signoff_announcement], 40.0, "pre_trackend")
                 end
-                request_command(["enqueue_silence", "20"], 0.0, "trackend")
+                request_command(["enqueue_silence", "20"], 0.0, "timed")
                 request_command(["change_show", next_scheduled_show_name()], 2.0, "trackend")
                 next_signon_announcement = list.assoc(default=station_id_announcement, next_scheduled_show_name(), show_signon_announcements())
                 if (next_signon_announcement != "") then

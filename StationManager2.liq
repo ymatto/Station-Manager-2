@@ -1575,14 +1575,12 @@ def auto_dj_loop() =
             # NOTE ideally this should be an == without the 100.0s slop, but I don't trust my float times
             if (next_scheduled_show_time() < up_next_hour_time + 100.0 and next_scheduled_show_name() != current_scheduled_show_name()) then
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
-                request_command(["set_pause_trackend", "true"], 0.0, "timed")
-                request_command(["change_show", next_scheduled_show_name()], 2.0, "trackend")
-                # this shouldn't strictly be necessary, with change_show unpausing itself, but just to be sure...
-                request_command(["set_pause_instant", "false"], 3.0, "trackend")
                 current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
                 if (current_signoff_announcement != "") then
                     request_command(["say", current_signoff_announcement], 40.0, "pre_trackend")
                 end
+                request_command(["enqueue_silence", "20"], 0.0, "trackend")
+                request_command(["change_show", next_scheduled_show_name()], 2.0, "trackend")
                 next_signon_announcement = list.assoc(default=station_id_announcement, next_scheduled_show_name(), show_signon_announcements())
                 if (next_signon_announcement != "") then
                     request_command(["say", next_signon_announcement], 13.0, "trackend")
@@ -1598,14 +1596,12 @@ def auto_dj_loop() =
             if (next_scheduled_show_time() < up_next_hour_time + 100.0 and next_scheduled_show_name() != current_scheduled_show_name()) then
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
                 log (" *** AUTO-DJ: Current track ends more than 10 minutes after the hour. ")
-                request_command(["set_pause_instant", "true"], 40.0, "timed")
-                request_command(["change_show", next_scheduled_show_name()], 42.0, "timed")
-                # this shouldn't strictly be necessary, with change_show unpausing itself, but just to be sure...
-                request_command(["set_pause_instant", "false"], 43.0, "timed")
                 current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
                 if (current_signoff_announcement != "") then
                     request_command(["say", current_signoff_announcement], 0.0, "timed")
                 end
+                request_command(["enqueue_silence", "20"], 40.0, "timed")
+                request_command(["change_show", next_scheduled_show_name()], 42.0, "timed")
                 next_signon_announcement = list.assoc(default=station_id_announcement, next_scheduled_show_name(), show_signon_announcements())
                 if (next_signon_announcement != "") then
                     request_command(["say", next_signon_announcement], 62.0, "timed")

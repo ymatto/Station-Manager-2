@@ -1040,21 +1040,43 @@ def say(thing_to_say) =
 end
 
 
+# a source that will play at the end of the current track, regardless of what the playlist is doing
+request_injection_source = request.queue(id="playover_source") # removed audio_to_stereo at v2.0
+
+
+def enqueue_silence (duration_seconds) =
+    request_injection_source.push(request.create("synth:shape=sine,frequency=0.0,duration=" ^ string(duration_seconds)))
+end
+
+def enqueue_track (filename) = 
+    if (filename == "") then
+        log("Unable to enqueue track - no filename provided")
+    elsif (not file.exists(stationconfig_filename)) then
+        log("Unable to enqueue track - file does not exist: " ^ filename)
+    else
+        request_injection_source.push(request.create("file:" ^ filename))
+    end
+end
+
+
+def rewind () = 
+    current_track_metadata = current_show_source().last_metadata() ?? []
+    if (current_track_metadata != []) then
+        current_track_filename = current_track_metadata["filename"]
+        request_injection_source.push(request.create("synth:shape=sine,frequency=0.0,duration=2"))
+        request_injection_source.push(request.create(current_track_filename))
+        thread.pause(0.1) # to provide a moment for the requests to actually get into the queue before the skip
+        source.skip(current_show_source())
+    else
+        log("Unable to rewind current track - no metadata present")
+    end
+end
+
+
 def skip () =
     source.skip(current_show_source()) 
     log("Skipping to next track in playlist!")
 end
-
-
-# TEMP working here
-
-# a source that will play at the end of the current track, regardless of what the playlist is doing
-request_injection_source = request.queue(id="playover_source") # removed audio_to_stereo at v2.0
-
-def inject_request () =
-    request_injection_source.push(request.create("synth:shape=sine,frequency=100.0,duration=30"))
-end
-
 
 
 # Show management functions (plus change_show queueable command)
@@ -1146,6 +1168,7 @@ end
 
 # Command queue execution functions
 
+# commands are of format: ["command_name", "command_argument"]
 def execute_a_command(command) =
     command_name = list.hd(default="", command)
     command_arg = list.nth(default="", command, 1)
@@ -1162,6 +1185,12 @@ def execute_a_command(command) =
         set_voice(command_arg)
     elsif (command_name == "skip") then
         skip()
+    elsif (command_name == "rewind") then
+        rewind()
+    elsif (command_name == "enqueue_silence") then
+        enqueue_silence(int_of_string(command_arg))
+    elsif (command_name == "enqueue_track") then
+        enqueue_track(command_arg)
     else
         log("   \"#{command_name}\" is not a supported command!")
     end
@@ -1392,14 +1421,6 @@ server.register(namespace="station",
     "specials",
     station_get_specials)
 
-# TEMP FOR TESTING
-
-def inject_silence(input_string) =
-    inject_request()
-    "Okay"
-end
-
-server.register(namespace="station", "try", inject_silence)
 
 
                 

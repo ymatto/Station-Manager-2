@@ -186,6 +186,7 @@ log("STARTUP: Loading non-repetition requirements...")
 #   `dont_repeat_within_last` is one of a fixed list of options for the period during which the tag should not be repeated:
 #       track
 #       15 minutes
+#       30 minutes
 #       hour
 #       3 hours
 #       12 hours
@@ -807,6 +808,8 @@ def is_request_approved(req) =
         else
             if this_dont_repeat_within_last == "15 minutes" then
                 within_time := 900.0
+            elsif this_dont_repeat_within_last == "30 minutes" then
+                within_time := 1800.0
             elsif this_dont_repeat_within_last == "hour" then
                 within_time := 3600.0
             elsif this_dont_repeat_within_last == "3 hours" then

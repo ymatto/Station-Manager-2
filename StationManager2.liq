@@ -1581,15 +1581,13 @@ def auto_dj_loop() =
         request_command(["change_show", current_scheduled_show_name()], 0.0, "timed")
         last_handled_hour_time := today_start_time + (float_of_int(this_hour) * 3600.0)
     end
+    
     up_next_hour_time = last_handled_hour_time() + 3600.0
 
-    if (now >= next_scheduled_show_time()) then # always keep the latest schedule info correct, regardless of other logic
-        update_current_next_shows()
-    end
-
-    # do show signoffs, signons, and station IDs when it's time
-    if (now > up_next_hour_time - 60.0 and track_end_time >= up_next_hour_time) then
-        log(" *** AUTO-DJ: Time to handle the hour.")
+    # set up show signoffs, signons, and station IDs when it's time - at least a minute before the hour, but only if the current track will end after the hour
+    if (now > up_next_hour_time - 60.0 and track_end_time >= up_next_hour_time) then # only one run per hour - get done whatever needs doing
+        log(" *** AUTO-DJ: Time to prepare for the upcoming hour.")
+        # check if the playing track will end no later than 10 minutes after the hour
         if (track_end_time < up_next_hour_time + (10.0 * 60.0)) then # do stuff at the trackend
             # TODO - maybe ideally don't mostly repeat this code in two places (below), but for now make sure to make changes in both places
             # NOTE ideally this should be an == without the 100.0s slop, but I don't trust my float times
@@ -1634,6 +1632,10 @@ def auto_dj_loop() =
             end
         end
         last_handled_hour_time := up_next_hour_time # one way or the other, this hour is handled and this section won't run again
+    end
+
+    if (now >= next_scheduled_show_time()) then # always keep the latest schedule info correct for the next loop, regardless of other logic
+        update_current_next_shows()
     end
 
     next_pulse()

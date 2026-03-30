@@ -533,8 +533,7 @@ current_show_name = ref ("") # name of actual broadcasting show (independent of 
 current_show_source = ref (silence) # the current show playlist source that can be monitored or controlled
 current_voice = ref ("") # name of current voice to use for synthesized DJ statements
 
-pause_trackend = ref (false)
-pause_instant = ref (false)
+pause_playback = ref (false)
 
 track_endtime = ref (false)
 
@@ -957,23 +956,14 @@ end
 
 # Command-queueable functions
 
-def set_pause_trackend(arg) =
-    if (arg == "true") then
-        pause_trackend := true
-    elsif (arg == "false") then
-        pause_trackend := false
-    else
-        log("Bad arg to set_pause_trackend")
-    end
-end
 
-def set_pause_instant(arg) =
+def set_pause_playback(arg) =
     if (arg == "true") then
-        pause_instant := true
+        pause_playback := true
     elsif (arg == "false") then
-        pause_instant := false
+        pause_playback := false
     else
-        log("Bad arg to set_pause_instant")
+        log("Bad arg to set_pause_playback")
     end
 end
 
@@ -1089,10 +1079,6 @@ end
 
 def handle_track_end (this_metadata) =
     update_specials_and_last_played_state() # to be safe, attempt a specials update based on the now-playing track in case this isn't a normal next-track-in-playlist-queue track that is_request_approved would pick up
-    if pause_trackend() == true then
-        set_pause_instant("true")
-        set_pause_trackend("false")
-    end
     track_endtime := true # tell the command_loop to do track end things
     logtrack(this_metadata)
 end
@@ -1142,7 +1128,7 @@ def change_show(this_show_name) =
             #    blank meant that a track change would never happen again for that source, making it impossible to change
             #    back to that show.
             show_source_with_switches = 
-                switch(id="pause_handler", track_sensitive=false, [ ({pause_instant() == true}, silence), ({true},
+                switch(id="pause_handler", track_sensitive=false, [ ({pause_playback() == true}, silence), ({true},
                     current_show_source()
                 ) ] )
             output_source = smooth_add(duration=1.5, p=0.1, special=playover_source, normal=show_source_with_switches)
@@ -1168,7 +1154,7 @@ def change_show(this_show_name) =
     end
 
     # make sure we start playing, regardless of if the show actually switched or not
-    set_pause_instant("false")
+    set_pause_playback("false")
 
 end
 
@@ -1181,10 +1167,8 @@ def execute_a_command(command) =
     log("PROCESSING DJ COMMAND: " ^ command_name ^ " - with argument: " ^ command_arg)
     if (command_name == "change_show") then
         change_show(command_arg)
-    elsif (command_name == "set_pause_trackend") then
-        set_pause_trackend(command_arg)
-    elsif (command_name == "set_pause_instant") then
-        set_pause_instant(command_arg)
+    elsif (command_name == "set_pause_playback") then
+        set_pause_playback(command_arg)
     elsif (command_name == "say") then
         say(command_arg)
     elsif (command_name == "set_voice") then
@@ -1386,8 +1370,7 @@ end
 
 dj_command_list =   "  Supported commands:\n" ^
                     "      change_show [show name]\n" ^
-                    "      set_pause_trackend [true/false]\n" ^
-                    "      set_pause_instant [true/false]\n" ^
+                    "      set_pause_playback [true/false]\n" ^
                     "      say [statement]\n" ^
                     "      set_voice [voice name]\n" ^
                     "      skip\n" ^

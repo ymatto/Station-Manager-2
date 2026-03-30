@@ -1288,11 +1288,30 @@ def request_command(command, exec_delay, timing_type) =
     elsif (timing_type == "trackend") then
         log("Trackend command received:      " ^ string(command) ^ " with execution delay: " ^ string(exec_delay) ^ " after end of this track")
         trackend_enqueue(command, exec_delay)
-    elsif (timing_type == "pre_trackend") then
+    elsif (timing_type == "pre-trackend") then
         log("Pre-trackend command received:  " ^ string(command) ^ " with execution time: " ^ string(exec_delay) ^ " before end of this track")
         pre_trackend_enqueue(command, exec_delay)
     else
         log("Command ignored: Timing type " ^ string(timing_type) ^ " for " ^ string(command) ^ " command not recognized")
+    end
+end
+
+def clear_command_queue(timing_type) = 
+    if (timing_type == "timed") then
+        log("Clearing timed command queue")
+        timed_command_queue := []
+    elsif (timing_type == "trackend") then
+        log("Clearing trackend command queue")
+        trackend_command_queue := []
+    elsif (timing_type == "pre-trackend") then
+        log("Clearing pre-trackend command queue")
+        pre_trackend_command_queue := []
+    elsif (timing_type == "all") then
+        timed_command_queue := []
+        trackend_command_queue := []
+        pre_trackend_command_queue := []
+    else
+        log("Queue clear request ignored: Timing type " ^ string(timing_type) ^ "not recognized")
     end
 end
 
@@ -1342,7 +1361,7 @@ def request_command_from_string(input_string, request_type) =
             elsif (request_type == "trackend_delayed") then
                 if (command_time() < 0.0) then
                     command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
-                    request_command([command_name(), command_arg()], -(command_time()), "pre_trackend")
+                    request_command([command_name(), command_arg()], -(command_time()), "pre-trackend")
                     "Done"                    
                 else
                     command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
@@ -1374,12 +1393,21 @@ def dj_trackend_delayed_handler(input_string) =
 end
 
 def dj_get_queues(input_string) = 
-    "Commands to execute at a specific time:\n" ^
+    "timed queue - commands to execute at a specific time:\n" ^
     string(timed_command_queue()) ^ "\n" ^
-    "Commands to execute at a delay before the end of the track:\n" ^
+    "pre-trackend queue - commands to execute at a delay before the end of the track:\n" ^
     string(pre_trackend_command_queue()) ^ "\n" ^
-    "Commands to execute at a delay after the end of the track:\n" ^
+    "trackend queue - commands to execute at a delay after the end of the track:\n" ^
     string(trackend_command_queue())
+end
+
+def dj_clear_queue(input_string) = 
+    if (input_string == "timed" or input_string == "trackend" or input_string == "pre-trackend" or input_string == "all") then
+        clear_command_queue(input_string)
+        "Done"
+    else
+        "No or invalid queue identifier provided"
+    end
 end
 
 
@@ -1419,9 +1447,15 @@ server.register(namespace="dj",
 
 server.register(namespace="dj",
     usage="get_queues",
-    description="Returns the current command queues\n",
+    description="Returns the contents of the current command queues\n",
     "get_queues",
     dj_get_queues)
+
+server.register(namespace="dj",
+    usage="clear_queue [\"timed/pre-trackend/trackend/all\"]",
+    description="Clears the specified command queue (or all of them)\n",
+    "clear_queue",
+    dj_clear_queue)
 
 
 # Commands for station control board
@@ -1599,7 +1633,7 @@ def auto_dj_loop() =
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
                 current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
                 if (current_signoff_announcement != "") then
-                    request_command(["say", current_signoff_announcement], 40.0, "pre_trackend")
+                    request_command(["say", current_signoff_announcement], 40.0, "pre-trackend")
                 end
                 request_command(["enqueue_silence", "20"], 0.0, "timed")
                 request_command(["change_show", next_scheduled_show_name()], 2.0, "trackend")
@@ -1610,7 +1644,7 @@ def auto_dj_loop() =
             else # no scheduled show switch this hour, so see about doing a station ID
                 if (station_id_announcement != "") then
                     log(" *** AUTO-DJ: Time for a station ID announcement.")
-                    request_command(["say", station_id_announcement], 12.0, "pre_trackend")
+                    request_command(["say", station_id_announcement], 12.0, "pre-trackend")
                 end
             end
         else # it's time to go but the current track ends 10 minutes after the hour, so just do it without waiting for track end.

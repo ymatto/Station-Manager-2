@@ -1187,66 +1187,72 @@ def execute_a_command(command) =
     #TODO moar commands
 end
 
+# execute any timed commands that are due right now
 def process_timed_command_queue() =
     now = time()
-    def process_commands(this_command_pair) =
+    remaining_queue = ref([])
+    def iter_command(this_command_pair) =
         this_command = fst(this_command_pair)
         this_command_time = snd(this_command_pair)
         if (this_command_time <= now) then
+            # do it now!
             execute_a_command(this_command)
-            false # done, doesn't get saved in the updated list
         else
-            true
+            remaining_queue := list.append(remaining_queue(), [this_command_pair])
         end
     end
-    timed_command_queue := list.filter(process_commands, timed_command_queue()) # updated queue
+    list.iter(iter_command, timed_command_queue())
+    timed_command_queue := remaining_queue()
 end
 
+# execute any pre-trackend commands that are due right now
 def process_pre_trackend_command_queue() =
     track_remaining_time = source.remaining(current_show_source())
-    def process_commands(this_command_pair) =
+    remaining_queue = ref([])
+    def iter_command(this_command_pair) =
         this_command = fst(this_command_pair)
         this_command_time = snd(this_command_pair)
         if (track_remaining_time <= this_command_time) then
-            # do it now! (actually queue it for immediate execution if possible)
-            timed_enqueue(this_command, 0.0)
-            false # done, doesn't get saved in the updated list
+            # do it now!
+            execute_a_command(this_command)
         else
-            true
+            remaining_queue := list.append(remaining_queue(), [this_command_pair])
         end
     end
-    pre_trackend_command_queue := list.filter(process_commands, pre_trackend_command_queue()) # updated queue
+    list.iter(iter_command, pre_trackend_command_queue())
+    pre_trackend_command_queue := remaining_queue()
 end
 
+# clear out the pre-trackend and trackend queues
 def process_trackend_command_queue() =
-    def process_trackend_commands (this_command_pair) =
+    def execute_pretrackend_command(this_command_pair) =
+        this_command = fst(this_command_pair)
+        # do it now!
+        execute_a_command(this_command)
+    end
+    def handle_trackend_command (this_command_pair) =
         this_command = fst(this_command_pair)
         this_command_delay = snd(this_command_pair)
         if (this_command_delay <= 0.0) then
-            # queue it now!
-            timed_enqueue(this_command, 0.0)
+            # do it now!
+            execute_a_command(this_command)
         else
             # inject commands with non-zero delay into timed queue
             timed_enqueue(this_command, this_command_delay + 0.0)
         end
-        false # just return an empty queue to the filter
-    end
-    def process_pretrackend_commands(this_command_pair) =
-        this_command = fst(this_command_pair)
-        this_command_time = snd(this_command_pair)
-        # queue it now!
-        timed_enqueue(this_command, 0.0)
-        false # just return an empty queue to the filter
     end
 
-    remaining_pre_trackend_commands = list.length(pre_trackend_command_queue())
-    if (remaining_pre_trackend_commands > 0) then
-        log(string(remaining_pre_trackend_commands) ^ " pre-trackend DJ commands present in queue at track's end. Running these first.")
-        pre_trackend_command_queue := list.filter(process_pretrackend_commands, pre_trackend_command_queue()) # will just be cleared out
+    # first, do all of the outstanding pre-trackend commands that need to just happen now
+    num_pre_trackend_commands = list.length(pre_trackend_command_queue())
+    if (num_pre_trackend_commands > 0) then
+        log(string(num_pre_trackend_commands) ^ " pre-trackend DJ commands present in queue at track's end. Running these first.")
+        list.iter(execute_pretrackend_command, pre_trackend_command_queue())
+        pre_trackend_command_queue := []
     end
-
+    # then, for all trackend commands, either execute immediately or convert to timed commands
     if (list.length(trackend_command_queue()) > 0) then
-        trackend_command_queue := list.filter(process_trackend_commands, trackend_command_queue()) # will just be cleared out
+        list.iter(handle_trackend_command, trackend_command_queue())
+        trackend_command_queue := []
     end
 end
 
@@ -1254,18 +1260,21 @@ end
 
 def command_loop() =
     now = time()
-    # check pre_trackend_command_queue
-    track_remaining_time = source.remaining(current_show_source())
-    next_pre_trackend_time = snd(list.hd(default=(["", ""], -1.0), pre_trackend_command_queue()))
-    if (track_remaining_time <= next_pre_trackend_time) then
-        process_pre_trackend_command_queue()
-    end
+
     # check trackend_command_queue
     if (track_endtime()) then
         track_endtime := false # reset to start waiting for next trackend
         process_trackend_command_queue()
+    else # only check the pre-trackend queue if it's not a track endtime (since that will clear that queue anyway)
+        # check pre_trackend_command_queue
+        track_remaining_time = source.remaining(current_show_source())
+        next_pre_trackend_time = snd(list.hd(default=(["", ""], -1.0), pre_trackend_command_queue()))
+        if (track_remaining_time <= next_pre_trackend_time) then
+            process_pre_trackend_command_queue()
+        end
     end
-    # check timed_command_queue
+
+    # check timed_command_queue (which will now also contain any trackend commands to do at this moment)
     next_timed_command_time = snd(list.hd(default=(["", ""], 0.0), timed_command_queue()))
     if (now >= next_timed_command_time and next_timed_command_time != 0.0) then
         process_timed_command_queue()

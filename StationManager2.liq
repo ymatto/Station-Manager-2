@@ -1328,23 +1328,29 @@ def request_command_from_string(input_string, request_type) =
             "Done"           
         else
             last_input = list.nth(default="", input_list, input_list_length-1)
-            last_input_as_float = float_of_string(default=-1.0, last_input)
-            if (last_input_as_float >= 0.0) then
-                command_time := last_input_as_float
-                command_time_length = string.length(last_input)
-                if (request_type == "delayed") then
+            last_input_as_float = float_of_string(default=0.0, last_input)
+            command_time := last_input_as_float
+            command_time_length = string.length(last_input)
+            if (request_type == "delayed") then
+                if (command_time() < 0.0) then
+                    "Cannot delay a command into the past"
+                else
                     command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
                     request_command([command_name(), command_arg()], command_time(), "timed")
                     "Done"
-                elsif (request_type == "trackend_delayed") then
+                end
+            elsif (request_type == "trackend_delayed") then
+                if (command_time() < 0.0) then
+                    command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
+                    request_command([command_name(), command_arg()], -(command_time()), "pre_trackend")
+                    "Done"                    
+                else
                     command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
                     request_command([command_name(), command_arg()], command_time(), "trackend")
-                    "Done"               
-                else
-                    "Invalid request type provided"
-                end
+                    "Done"
+                end             
             else
-                "Invalid delay in seconds provided"
+                "Invalid request type provided"
             end
         end
     end
@@ -1365,6 +1371,15 @@ end
 
 def dj_trackend_delayed_handler(input_string) =
     request_command_from_string(input_string, "trackend_delayed")
+end
+
+def dj_get_queues(input_string) = 
+    "Commands to execute at a specific time:\n" ^
+    string(timed_command_queue()) ^ "\n" ^
+    "Commands to execute at a delay before the end of the track:\n" ^
+    string(pre_trackend_command_queue()) ^ "\n" ^
+    "Commands to execute at a delay after the end of the track:\n" ^
+    string(trackend_command_queue())
 end
 
 
@@ -1401,6 +1416,12 @@ server.register(namespace="dj",
     description="Inserts a command into the DJ queue to be run at an optional delay time (s) from track's end\n" ^ dj_command_list,
     "trackend_delayed",
     dj_trackend_delayed_handler)
+
+server.register(namespace="dj",
+    usage="get_queues",
+    description="Returns the current command queues\n",
+    "get_queues",
+    dj_get_queues)
 
 
 # Commands for station control board

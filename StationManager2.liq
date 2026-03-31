@@ -546,9 +546,12 @@ specials_req_overdue_states = ref([]) # [ ("Best Of", false), (...) ]
 overdue_special_names = ref([]) # [ "Best Of", "90s Jams", ... ]
 specials_hour = ref(time.local().hour)
 specials_plays_this_hour = ref([]) # [ ("Best Of", 3), (...) ] - resets at the hour
+specials_show_name = ref("")
+specials_plays_this_show = ref([]) # [ ("Best Of", 3), (...) ] - resets when new show is about to start
+specials_plays_last_show = ref([]) # [ ("Best Of", 3), (...) ] - updates when new show is about to start, with the previous show's specials
 specials_day = ref(time.local().day)
-specials_plays_today = ref([]) # [ ("Best Of", 3), (...) ] - resets at midnight
-specials_plays_yesterday = ref([]) # [ ("Best Of", 3), (...) ] - updated at midnight with the previous day's "today"
+specials_plays_today = ref([]) # [ ("Best Of", 3), (...) ] - resets when new day is about to start
+specials_plays_yesterday = ref([]) # [ ("Best Of", 3), (...) ] - updated when new day is about to start, with the previous day's specials
 specials_plays_continuous = ref([]) # [ ("Best Of", 3), (...) ] - never resets
 
 # keep a cache of the specials each track matches to avoid repeated complicated analysis of metadata
@@ -661,20 +664,22 @@ end
 # keep track of the last track we logged the specials last played state for
 last_current_track_logged = ref("")
 
-# big function to see what specials state we'll be in, considering the currently playing track **at the time when it finishes**
-# intended to be called just after a track has started playing, avoids redundant tallying if called more than once during a track
+# big function to see what specials state we'll be in, considering the currently-playing track
+# intended to be called just after a track has started playing, avoiding redundant tallying if called more than once during a track
 def update_specials_and_last_played_state()
-    # get the playing track (likely just started as the next playlist request)
+    # get the playing track
     current_track_metadata = current_show_source().last_metadata() ?? []
     current_track_remaining = current_show_source().remaining()
     current_track_filename = current_track_metadata["filename"]
     # log("Updating specials status with:  " ^ string(current_track_filename) ^ " with remaining time " ^ string(current_track_remaining))
 
-    top_of_hour_play = ref(false)
+    track_ends_in_new_hour = ref(false)
 
     def increment_specials_plays(this_special_name)
         this_hour_playcount = list.assoc(default=0, this_special_name, specials_plays_this_hour())
         specials_plays_this_hour := list.add((this_special_name, this_hour_playcount + 1), list.assoc.remove(this_special_name, specials_plays_this_hour()))
+        this_show_playcount = list.assoc(default=0, this_special_name, specials_plays_this_show())
+        specials_plays_this_show := list.add((this_special_name, this_show_playcount + 1), list.assoc.remove(this_special_name, specials_plays_this_show()))
         today_playcount = list.assoc(default=0, this_special_name, specials_plays_today())
         specials_plays_today := list.add((this_special_name, today_playcount + 1), list.assoc.remove(this_special_name, specials_plays_today()))
         continuous_playcount = list.assoc(default=0, this_special_name, specials_plays_continuous())
@@ -688,44 +693,58 @@ def update_specials_and_last_played_state()
 
         # get the specials the playing track matches
         track_special_names = classify_track(current_track_metadata)
+
+        # if it is a new hour/show/day now, clear specials tracking for the past and update current times so we register this track's specials correctly
+        now_time = time()
+        now_hour = time.local(now_time).hour
+        now_day = time.local(now_time).day
+        if  now_hour != specials_hour() then
+            log("This track is in a new hour of specials")
+            specials_plays_this_hour := [] # reset for new hour
+            specials_hour := now_hour
+        end
+        if now_day != specials_day() then
+            log("This track is in a new day of specials.\nTotal specials plays today: " ^ string(specials_plays_today()) ^ "\nSpecials plays since launch: " ^ string(specials_plays_continuous()))
+            specials_plays_yesterday := specials_plays_today()
+            specials_plays_today := []
+            specials_day := now_day
+        end
+        if specials_show_name() != current_show_name() then
+            log("This track is in a new show of specials")
+            specials_plays_last_show := specials_plays_this_show()
+            specials_plays_this_show := [] # reset for new show
+            specials_plays_this_hour := [] # also reset the hour tracking - if a show is manually changed mid-hour, previous plays this hour don't really matter
+            specials_show_name := current_show_name()
+        end
+
         # increment specials play counts with the the track_special_names, for the *current* time
         list.iter(increment_specials_plays, track_special_names)
         log("Updated specials play count for the " ^ string(specials_hour()) ^ ":00 hour with track " ^ current_track_filename ^ "\n    " ^ string(specials_plays_this_hour()))
 
-        # if it will be a new hour at the *end* of this track, clear specials tracking for last hour
-        # and reset current hour so we register this track's specials toward next hour
+        # now update specials_req_overdue_states for time at the expected END of current track
+
+        # find out if track will end in a new hour of specials or not
         time_at_track_end = time() + current_track_remaining
         hour_of_track_end = time.local(time_at_track_end).hour
-        day_of_track_end = time.local(time_at_track_end).day
         if specials_hour() != hour_of_track_end then
-            log("This track will start in a new hour of specials!")
-            specials_req_overdue_states := []
-            specials_plays_this_hour := []
-            specials_hour := hour_of_track_end
-            top_of_hour_play := true
+            track_ends_in_new_hour := true
         else
-            top_of_hour_play := false
-        end
-        if specials_day() != day_of_track_end then
-            log("This track will start in a new day!\nTotal specials plays today: " ^ string(specials_plays_today()) ^ "\nSpecials plays since launch: " ^ string(specials_plays_continuous()))
-            specials_plays_yesterday := specials_plays_today()
-            specials_plays_today := []
-            specials_day := day_of_track_end
+            track_ends_in_new_hour := false
         end
 
-        # update specials_req_overdue_states **for time at the expected end of current track**
-
-        # iterator to figure out the overdue status of a given special requirement
+        # iterator to figure out the overdue status of a given special requirement, at the *end* of the current track
         def get_special_state(this_special_reqs)
-
+            # load this special's requirements
             this_special_name = this_special_reqs.special_name # "Best Of"
             this_per_hour_target = this_special_reqs.per_hour_target ?? 0
             this_try_top_of_hour = this_special_reqs.try_top_of_hour ?? false
+
             this_special_overdue_state = ref(false)
+            actual_plays = ref(0)
             
             # TODO: add more options like perhaps try_show_end, try_show_start, per_day_target, per_show_target ?
-            if this_try_top_of_hour and top_of_hour_play() then
-                # per_hour_target doesn't matter - top_of_hour requirement makes this special immediately overdue
+            if this_try_top_of_hour and track_ends_in_new_hour() then
+                # per_hour_target doesn't matter - it will be top of the hour so top_of_hour requirement makes this special immediately overdue
                 this_special_overdue_state := true
             elsif this_per_hour_target > 0 then
                 # let's see about the per-hour target
@@ -735,20 +754,25 @@ def update_specials_and_last_played_state()
                     # important math... for example:
                     # 1 play per hour adds target_play increment at 30 minute mark
                     # 3 plays per hour adds target_play increments at 10, 30, and 50 minute marks
-                actual_plays = list.assoc(default=0, this_special_name, specials_plays_this_hour())
-                if target_plays > actual_plays then
+                if (track_ends_in_new_hour()) then # play count will reset in the hour about to start
+                    actual_plays := 0
+                else # current hour's play count is valid to use
+                    actual_plays := list.assoc(default=0, this_special_name, specials_plays_this_hour())
+                end
+                if target_plays > actual_plays() then
                     # we're behind - make this overdue
                     this_special_overdue_state := true
                 end
             end 
 
+            # return the status of the special
             (this_special_name, this_special_overdue_state())
         end
 
         new_specials_overdue_states = list.map(get_special_state, station_specials_reqs())
         specials_req_overdue_states := new_specials_overdue_states
 
-        # Update last_plays_cache based on current_track's metadata
+        # update last_plays_cache based on current_track's metadata
         # log("Updating last play times with: " ^ current_track_filename)
         def get_updated_last_plays_for_each_required_tag_name(this_nonrepetition_req)
             this_tag_name = this_nonrepetition_req.tag_name
@@ -758,7 +782,6 @@ def update_specials_and_last_played_state()
             updated_this_last_plays = list.add((tag_of_current_track, time()), list.assoc.remove(tag_of_current_track, this_last_plays))
             (this_tag_name, updated_this_last_plays)
         end
-
         last_plays_cache := list.map(get_updated_last_plays_for_each_required_tag_name, station_nonrepetition_reqs())
     end
 end
@@ -1475,6 +1498,10 @@ def station_get_specials(input_string) =
     trimmed_input = string.trim(input_string)
     if trimmed_input == "this_hour" then
         json.stringify(specials_plays_this_hour())
+    elsif trimmed_input == "this_show" then
+        json.stringify(specials_plays_this_show()) 
+    elsif trimmed_input == "last_show" then
+        json.stringify(specials_plays_last_show()) 
     elsif trimmed_input == "today" then
         json.stringify(specials_plays_today())
     elsif trimmed_input == "yesterday" then
@@ -1487,7 +1514,7 @@ def station_get_specials(input_string) =
 end
 
 server.register(namespace="station",
-    usage="get_specials <this_hour|today|yesterday|continuous>",
+    usage="get_specials <this_hour|this_show|last_show|today|yesterday|continuous>",
     description="Returns a JSON array of the counts of specials that have played during the specified timeframe",
     "get_specials",
     station_get_specials)

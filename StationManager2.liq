@@ -989,9 +989,9 @@ end
 
 def playover(file_path) =
     # Queue up the speech along with some bookending silence
-    playover_source.push(request.create("synth:shape=sine,frequency=0.0,duration=3"))
-    playover_source.push(request.create("file:" ^ file_path))
-    playover_source.push(request.create("synth:shape=sine,frequency=0.0,duration=1"))
+    playover_source.push(request.create(temporary=true, "synth:shape=sine,frequency=0.0,duration=3"))
+    playover_source.push(request.create(temporary=true, "file:" ^ file_path))
+    playover_source.push(request.create(temporary=true, "synth:shape=sine,frequency=0.0,duration=1"))
 end
 
 def say(thing_to_say) =
@@ -1043,7 +1043,7 @@ request_injection_source = request.queue(id="playover_source") # removed audio_t
 
 
 def enqueue_silence (duration_seconds) =
-    request_injection_source.push(request.create("synth:shape=sine,frequency=0.0,duration=" ^ string(duration_seconds)))
+    request_injection_source.push(request.create(temporary=true, "synth:shape=sine,frequency=0.0,duration=" ^ string(duration_seconds)))
 end
 
 def enqueue_track (filename) = 
@@ -1061,7 +1061,7 @@ def rewind () =
     current_track_metadata = current_show_source().last_metadata() ?? []
     if (current_track_metadata != []) then
         current_track_filename = current_track_metadata["filename"]
-        request_injection_source.push(request.create("synth:shape=sine,frequency=0.0,duration=2"))
+        request_injection_source.push(request.create(temporary=true, "synth:shape=sine,frequency=0.0,duration=2"))
         request_injection_source.push(request.create(current_track_filename))
         thread.pause(0.1) # to provide a moment for the requests to actually get into the queue before the skip
         source.skip(current_show_source())

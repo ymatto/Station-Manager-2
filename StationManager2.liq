@@ -548,6 +548,7 @@ specials_hour = ref(time.local().hour)
 specials_plays_this_hour = ref([]) # [ ("Best Of", 3), (...) ] - resets at the hour
 specials_day = ref(time.local().day)
 specials_plays_today = ref([]) # [ ("Best Of", 3), (...) ] - resets at midnight
+specials_plays_yesterday = ref([]) # [ ("Best Of", 3), (...) ] - updated at midnight with the previous day's "today"
 specials_plays_continuous = ref([]) # [ ("Best Of", 3), (...) ] - never resets
 
 # keep a cache of the specials each track matches to avoid repeated complicated analysis of metadata
@@ -707,6 +708,7 @@ def update_specials_and_last_played_state()
         end
         if specials_day() != day_of_track_end then
             log("This track will start in a new day!\nTotal specials plays today: " ^ string(specials_plays_today()) ^ "\nSpecials plays since launch: " ^ string(specials_plays_continuous()))
+            specials_plays_yesterday := specials_plays_today()
             specials_plays_today := []
             specials_day := day_of_track_end
         end
@@ -1461,7 +1463,7 @@ server.register(namespace="dj",
     dj_get_queues)
 
 server.register(namespace="dj",
-    usage="clear_queue [\"timed/pre-trackend/trackend/all\"]",
+    usage="clear_queue <timed|pre-trackend|trackend|all>",
     description="Clears the specified command queue (or all of them)\n",
     "clear_queue",
     dj_clear_queue)
@@ -1475,17 +1477,19 @@ def station_get_specials(input_string) =
         json.stringify(specials_plays_this_hour())
     elsif trimmed_input == "today" then
         json.stringify(specials_plays_today())
+    elsif trimmed_input == "yesterday" then
+        json.stringify(specials_plays_yesterday())
     elsif trimmed_input == "continuous" then
         json.stringify(specials_plays_continuous())
     else
-        "ERROR invalid timeframe specified, choose one of: this_hour, today, or continuous"
+        "Invalid timeframe specified"
     end
 end
 
 server.register(namespace="station",
-    usage="specials <this_hour|today|continuous>",
+    usage="get_specials <this_hour|today|yesterday|continuous>",
     description="Returns a JSON array of the counts of specials that have played during the specified timeframe",
-    "specials",
+    "get_specials",
     station_get_specials)
 
 

@@ -225,7 +225,7 @@ show_voices = ref ([]) # ("Beats", "Whisper"), ("Groovestyle", "Ava"), ...
 show_signon_announcements = ref ([])
 show_signoff_announcements = ref ([])
 show_shuffle_modes = ref ([])
-show_specials_reqs = ref([]) # ("Beats", <same format as station_specials_reqs>), (...)
+show_specials_reqs = ref([]) # ("Beats", [<same format as station_specials_reqs>]), (...)
 
 showconfig_file = file.contents(station_showconfig_path)
 
@@ -548,6 +548,7 @@ end
 current_show_name = ref ("") # name of actual broadcasting show (independent of schedule - if there even is one)
 current_show_source = ref (silence) # the current show playlist source that can be monitored or controlled
 current_voice = ref ("") # name of current voice to use for synthesized DJ statements
+current_specials_reqs = ref([])
 
 pause_playback = ref (false)
 
@@ -790,7 +791,7 @@ def update_specials_and_last_played_state()
             (this_special_name, this_special_overdue_state())
         end
 
-        new_specials_overdue_states = list.map(get_special_state, station_specials_reqs())
+        new_specials_overdue_states = list.map(get_special_state, current_specials_reqs())
         specials_req_overdue_states := new_specials_overdue_states
 
         # update last_plays_cache based on current_track's metadata
@@ -1134,6 +1135,7 @@ show_sources = ref ([]) # the playlist sources themselves, to be assigned to cur
 show_output_sources = ref ([]) # sources with all of the additional hooks to be assigned to current_output_source
 
 
+
 def change_show(this_show_name) =
     if (list.assoc(default="error", this_show_name, show_paths()) != "error") then
         log("  --- New show starting: " ^ this_show_name ^ " ------------------------------------")
@@ -1195,6 +1197,14 @@ def change_show(this_show_name) =
                     station_currentshow_path
                 )
         )
+        this_show_specials_reqs = list.assoc(default=[], current_show_name(), show_specials_reqs())
+        if this_show_specials_reqs != [] then
+            # log("   Using this-show's own specials requirements:\n" ^ "   " ^ string(this_show_specials_reqs))
+            current_specials_reqs := this_show_specials_reqs
+        else
+            # log("   Using station-default specials requirements:\n" ^ "   " ^ string(station_specials_reqs()))
+            current_specials_reqs := station_specials_reqs()
+        end
     else
         log("No playlist path specified for requested show: " ^ this_show_name)
     end

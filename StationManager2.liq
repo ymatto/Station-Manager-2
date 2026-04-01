@@ -553,6 +553,7 @@ specials_day = ref(time.local().day)
 specials_plays_today = ref([]) # [ ("Best Of", 3), (...) ] - resets when new day is about to start
 specials_plays_yesterday = ref([]) # [ ("Best Of", 3), (...) ] - updated when new day is about to start, with the previous day's specials
 specials_plays_continuous = ref([]) # [ ("Best Of", 3), (...) ] - never resets
+specials_plays_continuous_by_show = ref([]) # [ ("Hiphop", [ ("Best Of", 3), (...) ] ), (...) ] - never resets
 
 # keep a cache of the specials each track matches to avoid repeated complicated analysis of metadata
 track_special_matches_cache = ref([])
@@ -684,6 +685,10 @@ def update_specials_and_last_played_state()
         specials_plays_today := list.add((this_special_name, today_playcount + 1), list.assoc.remove(this_special_name, specials_plays_today()))
         continuous_playcount = list.assoc(default=0, this_special_name, specials_plays_continuous())
         specials_plays_continuous := list.add((this_special_name, continuous_playcount + 1), list.assoc.remove(this_special_name, specials_plays_continuous()))
+        specials_plays_continuous_by_this_show = list.assoc(default=[], current_show_name(), specials_plays_continuous_by_show())
+        continuous_by_this_show_playcount = list.assoc(default=0, this_special_name, specials_plays_continuous_by_this_show)
+        updated_specials_plays_continuous_by_this_show = list.add((this_special_name, continuous_by_this_show_playcount + 1), list.assoc.remove(this_special_name, specials_plays_continuous_by_this_show))
+        specials_plays_continuous_by_show := list.add((current_show_name(), updated_specials_plays_continuous_by_this_show), list.assoc.remove(current_show_name(), specials_plays_continuous_by_show()))
     end
 
     # update state of specials and repetitions, if we haven't done so for the playing track
@@ -1508,13 +1513,15 @@ def station_get_specials(input_string) =
         json.stringify(specials_plays_yesterday())
     elsif trimmed_input == "continuous" then
         json.stringify(specials_plays_continuous())
+    elsif trimmed_input == "continuous_by_show" then
+        json.stringify(specials_plays_continuous_by_show())
     else
         "Invalid timeframe specified"
     end
 end
 
 server.register(namespace="station",
-    usage="get_specials <this_hour|this_show|last_show|today|yesterday|continuous>",
+    usage="get_specials <this_hour|this_show|last_show|today|yesterday|continuous|continuous_by_show>",
     description="Returns a JSON array of the counts of specials that have played during the specified timeframe",
     "get_specials",
     station_get_specials)

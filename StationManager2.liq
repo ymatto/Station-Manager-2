@@ -193,6 +193,7 @@ log("STARTUP: Loading non-repetition requirements...")
 #       12 hours
 #       day
 station_nonrepetition_reqs = ref([])
+
 if (file.exists(station_nonrepetition_reqs_path)) then
     station_nonrepetition_reqs_file = file.contents(station_nonrepetition_reqs_path)
     let json.parse ( new_station_nonrepetition_reqs :
@@ -226,6 +227,7 @@ show_signon_announcements = ref ([])
 show_signoff_announcements = ref ([])
 show_shuffle_modes = ref ([])
 show_specials_reqs = ref([]) # ("Beats", [<same format as station_specials_reqs>]), (...)
+show_nonrepetition_reqs = ref([]) # ("Beats", [<same format as station_nonrepetition_reqs>]), (...)
 
 showconfig_file = file.contents(station_showconfig_path)
 
@@ -238,7 +240,8 @@ let json.parse (show_list : [(
         signon_announcement: string?, 
         signoff_announcement: string?,
         shuffle_mode: string?,
-        specials_reqs_path: string?
+        specials_reqs_path: string?,
+        nonrepetition_reqs_path: string?
     }
 )] as json.object ) = showconfig_file
 
@@ -272,10 +275,45 @@ def get_show(thisshow) =
             ] ) = thisspecials_reqs_file
         show_specials_reqs := list.append([(thisshowkey, thisspecials_reqs)], show_specials_reqs())
     end
+    thisnonrepetition_reqs_path = thisshowdata.nonrepetition_reqs_path ?? ""
+    if file.exists(thisnonrepetition_reqs_path) then # this show has its own nonrepetition_reqs file to override the station's default
+        thisnonrepetition_reqs_file = file.contents(thisnonrepetition_reqs_path)
+        let json.parse ( thisnonrepetition_reqs :
+            [ 
+                {
+                    tag_name: string,
+                    dont_repeat_within_last: string
+                }
+            ] ) = thisnonrepetition_reqs_file
+        show_nonrepetition_reqs := list.append([(thisshowkey, thisnonrepetition_reqs)], show_nonrepetition_reqs())
+    end
 end
 
 list.iter(get_show, show_list)
 
+
+
+# LOAD list of relevant metadata tags that are used in any nonrepetition requirements, for usage tracking
+relevant_nonrepetition_tags = ref([])
+
+def include_all_tags_from_nonrep_requirements(this_nonrep_requirements) =
+    def include_tag_from_req(this_nonrep_req) =
+        this_tag = this_nonrep_req.tag_name
+        if not list.exists(fun(x) -> x == this_tag, relevant_nonrepetition_tags()) then
+            relevant_nonrepetition_tags := list.add(this_tag, relevant_nonrepetition_tags())
+        end
+    end
+    list.iter(include_tag_from_req, this_nonrep_requirements)
+end
+include_all_tags_from_nonrep_requirements(station_nonrepetition_reqs())
+def include_all_tags_from_show_nonrep_requirements(this_show_nonrep_req) =
+    this_reqs = snd(this_show_nonrep_req)
+    include_all_tags_from_nonrep_requirements(this_reqs)
+end
+list.iter(include_all_tags_from_show_nonrep_requirements, show_nonrepetition_reqs())
+# log("Relevant tags for nonrepetition rules:\n" ^ string(relevant_nonrepetition_tags()))
+
+    
 
 
 # LOAD SHOW SCHEDULE
@@ -549,6 +587,7 @@ current_show_name = ref ("") # name of actual broadcasting show (independent of 
 current_show_source = ref (silence) # the current show playlist source that can be monitored or controlled
 current_voice = ref ("") # name of current voice to use for synthesized DJ statements
 current_specials_reqs = ref([])
+current_nonrepetition_reqs = ref([])
 
 pause_playback = ref (false)
 
@@ -796,15 +835,14 @@ def update_specials_and_last_played_state()
 
         # update last_plays_cache based on current_track's metadata
         # log("Updating last play times with: " ^ current_track_filename)
-        def get_updated_last_plays_for_each_required_tag_name(this_nonrepetition_req)
-            this_tag_name = this_nonrepetition_req.tag_name
+        def get_updated_last_plays_for_each_required_tag_name(this_tag_name)
             this_last_plays = list.assoc(default=[], this_tag_name, last_plays_cache())
 
             tag_of_current_track = list.assoc(default="", this_tag_name, current_track_metadata)
             updated_this_last_plays = list.add((tag_of_current_track, time()), list.assoc.remove(tag_of_current_track, this_last_plays))
             (this_tag_name, updated_this_last_plays)
         end
-        last_plays_cache := list.map(get_updated_last_plays_for_each_required_tag_name, station_nonrepetition_reqs())
+        last_plays_cache := list.map(get_updated_last_plays_for_each_required_tag_name, relevant_nonrepetition_tags())
     end
 end
 
@@ -921,7 +959,7 @@ def is_request_approved(req) =
             >#
 
             # Reject if the track is a repetition that violates the stations rules
-            all_repetition_rules_satisfied = list.for_all(is_nonrepetition_req_satisfied, station_nonrepetition_reqs())
+            all_repetition_rules_satisfied = list.for_all(is_nonrepetition_req_satisfied, current_nonrepetition_reqs())
             if not all_repetition_rules_satisfied then
                 # log("REJECTED - Track violates at least one repetition rule!")
                 false
@@ -1199,11 +1237,19 @@ def change_show(this_show_name) =
         )
         this_show_specials_reqs = list.assoc(default=[], current_show_name(), show_specials_reqs())
         if this_show_specials_reqs != [] then
-            # log("   Using this-show's own specials requirements:\n" ^ "   " ^ string(this_show_specials_reqs))
+            log("   Using this show's own specials requirements:\n" ^ "   " ^ string(this_show_specials_reqs))
             current_specials_reqs := this_show_specials_reqs
         else
-            # log("   Using station-default specials requirements:\n" ^ "   " ^ string(station_specials_reqs()))
+            log("   Using station-default specials requirements:\n" ^ "   " ^ string(station_specials_reqs()))
             current_specials_reqs := station_specials_reqs()
+        end
+        this_show_nonrepetition_reqs = list.assoc(default=[], current_show_name(), show_nonrepetition_reqs())
+        if this_show_nonrepetition_reqs != [] then
+            log("   Using this show's own nonrepetition requirements:\n" ^ "   " ^ string(this_show_nonrepetition_reqs))
+            current_nonrepetition_reqs := this_show_nonrepetition_reqs
+        else
+            log("   Using station-default nonrepetition requirements:\n" ^ "   " ^ string(station_nonrepetition_reqs()))
+            current_nonrepetition_reqs := station_nonrepetition_reqs()
         end
     else
         log("No playlist path specified for requested show: " ^ this_show_name)

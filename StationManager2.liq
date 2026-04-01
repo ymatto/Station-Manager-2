@@ -160,6 +160,7 @@ log("STARTUP: Loading specials requirements...")
 #   `try_top_of_hour`, if set, tries to play the special as the first thing after an hour switch
 # TODO ... also want to implement options for `try_show_start` and `try_show_end`
 station_specials_reqs = ref([])
+
 if (file.exists(station_specials_reqs_path)) then
     station_specials_reqs_file = file.contents(station_specials_reqs_path)
     let json.parse ( new_station_specials_reqs :
@@ -224,6 +225,7 @@ show_voices = ref ([]) # ("Beats", "Whisper"), ("Groovestyle", "Ava"), ...
 show_signon_announcements = ref ([])
 show_signoff_announcements = ref ([])
 show_shuffle_modes = ref ([])
+show_specials_reqs = ref([]) # ("Beats", <same format as station_specials_reqs>), (...)
 
 showconfig_file = file.contents(station_showconfig_path)
 
@@ -235,7 +237,8 @@ let json.parse (show_list : [(
         DJ_voice: string?,
         signon_announcement: string?, 
         signoff_announcement: string?,
-        shuffle_mode: string?  
+        shuffle_mode: string?,
+        specials_reqs_path: string?
     }
 )] as json.object ) = showconfig_file
 
@@ -256,6 +259,19 @@ def get_show(thisshow) =
     show_signoff_announcements := list.append([(thisshowkey, thissignoffannouncement)], show_signoff_announcements())
     thisshuffle_mode = thisshowdata.shuffle_mode ?? "songs" # TODO: make actually do something
     show_shuffle_modes := list.append([(thisshowkey, thisshuffle_mode)], show_shuffle_modes())
+    thisspecials_reqs_path = thisshowdata.specials_reqs_path ?? ""
+    if file.exists(thisspecials_reqs_path) then # this show has its own specials_reqs file to override the station's default
+        thisspecials_reqs_file = file.contents(thisspecials_reqs_path)
+        let json.parse ( thisspecials_reqs :
+            [ 
+                {
+                    special_name: string,
+                    per_hour_target: int,
+                    try_top_of_hour: bool
+                }
+            ] ) = thisspecials_reqs_file
+        show_specials_reqs := list.append([(thisshowkey, thisspecials_reqs)], show_specials_reqs())
+    end
 end
 
 list.iter(get_show, show_list)
@@ -1431,13 +1447,27 @@ def dj_trackend_delayed_handler(input_string) =
     request_command_from_string(input_string, "trackend_delayed")
 end
 
-def dj_get_queues(input_string) = 
-    "timed queue - commands to execute at a specific time:\n" ^
-    string(timed_command_queue()) ^ "\n" ^
-    "pre-trackend queue - commands to execute at a delay before the end of the track:\n" ^
-    string(pre_trackend_command_queue()) ^ "\n" ^
-    "trackend queue - commands to execute at a delay after the end of the track:\n" ^
-    string(trackend_command_queue())
+def dj_get_queue(input_string) = 
+    timed_queue = string(timed_command_queue())
+    pre_trackend_queue = string(pre_trackend_command_queue())
+    trackend_queue = string(trackend_command_queue())
+
+    if input_string == "" or input_string == "all" then
+        "timed queue - commands to execute at a specific time:\n" ^
+        timed_queue ^ "\n" ^
+        "pre-trackend queue - commands to execute at a delay before the end of the track:\n" ^
+        pre_trackend_queue ^ "\n" ^
+        "trackend queue - commands to execute at a delay after the end of the track:\n" ^
+        trackend_queue
+    elsif input_string == "timed" then
+        timed_queue
+    elsif input_string == "pre-trackend" then
+        pre_trackend_queue
+    elsif input_string == "trackend" then
+        trackend_queue
+    else
+        "Invalid argument provided"
+    end    
 end
 
 def dj_clear_queue(input_string) = 
@@ -1485,10 +1515,10 @@ server.register(namespace="dj",
     dj_trackend_delayed_handler)
 
 server.register(namespace="dj",
-    usage="get_queues",
-    description="Returns the contents of the current command queues\n",
-    "get_queues",
-    dj_get_queues)
+    usage="get_queue [<timed|pre-trackend|trackend|all>]",
+    description="Returns the contents of a current command queue, or all of them by default\n",
+    "get_queue",
+    dj_get_queue)
 
 server.register(namespace="dj",
     usage="clear_queue <timed|pre-trackend|trackend|all>",

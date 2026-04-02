@@ -2,7 +2,7 @@
 # If not running this from the commandline (such as launchd), make sure to include '--' before the configuration file argument
 # ie.: /Users/omm/Basscadet/StationManager2.liq -- stationconfig.json
 
-# Designed to run with Liquidsoap v2.4
+# Designed to run with Liquidsoap v2.4.2
 
 
 #<

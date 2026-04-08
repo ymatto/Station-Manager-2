@@ -21,5 +21,6 @@ services:
       # shared tmp for things like TTS files
       - /tmp/:/tmp
     environment:
-      - "Etc/UTC"
+      # set to your own local timezone code
+      - "TZ=America/Chicago"
     restart: unless-stopped

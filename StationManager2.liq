@@ -1789,7 +1789,7 @@ def auto_dj_loop() =
                 if (current_signoff_announcement != "") then
                     request_command(["say", current_signoff_announcement], 0.0, "timed")
                 end
-                # TODO: what I really want here is a fade-out of the playing track before the new show starts, if that's possible
+                # TODO: what I really want here is a fade-out of the playing track before the new show starts, if that's possible. Do a playover of silence...?
                 request_command(["change_show", next_scheduled_show_name()], 42.0, "timed")
                 next_signon_announcement = list.assoc(default=station_id_announcement, next_scheduled_show_name(), show_signon_announcements())
                 if (next_signon_announcement != "") then

@@ -159,7 +159,7 @@ log("STARTUP: Loading specials requirements...")
 #   `per_hour_target`, if set, is a target number of plays for the special within a given hour
 #   `try_top_of_hour`, if set, tries to play the special as the first thing after an hour switch
 #   `try_show_start`, if set, tries to play the special as the first thing of a new show
-# TODO ... also want to implement option for `try_show_end` and others
+# TODO ... also want to implement options for try_show_end, per_day_target, per_show_target and others
 station_specials_reqs = ref([])
 
 if (file.exists(station_specials_reqs_path)) then
@@ -941,6 +941,7 @@ def is_request_approved(req) =
     if number_request_checks() < 1 then
         # NOTE - This pause is annoying, but a better solution requires keeping track of metadata ourselves in a way that seems maybe even more error prone
         thread.pause(0.1) # pause for a moment to make sure metadata of the newly-playing track is available on last_metadata
+            
         time_request_check_start := time() # start the clock on checks
         update_specials_and_last_played_state() # since we're just starting to look for a next track, check that specials are updated for the newly-playing track
         # get list of the names of overdue requirements

@@ -779,8 +779,6 @@ def update_specials_and_last_played_state()
 
     # update state of specials and repetitions, if we haven't done so for the playing track
     if last_current_track_logged() != current_track_filename then # only do this once per track switch
-        
-        last_current_track_logged := current_track_filename
 
         # find out if track will end in a new hour of specials or not
         time_at_track_end = time() + current_track_remaining
@@ -811,7 +809,7 @@ def update_specials_and_last_played_state()
     end
 
     # now update specials_req_overdue_states for time at the expected END of current track (re-run this if a new show has started, changing the requirements)
-    if last_current_track_logged() != current_track_filename or new_show_just_started() then
+    if ( (last_current_track_logged() != current_track_filename) or new_show_just_started() ) then
 
         # iterator to figure out the overdue status of a given special requirement, at the *end* of the current track
         def get_special_state(this_special_reqs)
@@ -862,7 +860,10 @@ def update_specials_and_last_played_state()
 
         new_specials_overdue_states = list.map(get_special_state, current_specials_reqs())
         specials_req_overdue_states := new_specials_overdue_states
-
+    end
+    
+    if last_current_track_logged() != current_track_filename then # keep track that we already checked this one
+        last_current_track_logged := current_track_filename
     end
 end
 
@@ -941,7 +942,7 @@ def is_request_approved(req) =
     if number_request_checks() < 1 then
         # NOTE - This pause is annoying, but a better solution requires keeping track of metadata ourselves in a way that seems maybe even more error prone
         thread.pause(0.1) # pause for a moment to make sure metadata of the newly-playing track is available on last_metadata
-            
+
         time_request_check_start := time() # start the clock on checks
         update_specials_and_last_played_state() # since we're just starting to look for a next track, check that specials are updated for the newly-playing track
         # get list of the names of overdue requirements

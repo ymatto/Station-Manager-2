@@ -157,6 +157,7 @@ log("STARTUP: Loading specials requirements...")
 # This is your definition for when or how often specials should ideally be played
 #   `special_name` refers to one of the specials you defined in station_specials
 #   `per_hour_target`, if set, is a target number of plays for the special within a given hour
+#   `per_show_target`, if set, is a target number of plays for the special during the expected playtime of the show
 #   `try_top_of_hour`, if set, tries to play the special as the first thing after an hour switch
 #   `try_show_start`, if set, tries to play the special as the first thing of a new show
 # TODO ... also want to implement options for try_show_end, per_day_target, per_show_target and others
@@ -168,7 +169,8 @@ if (file.exists(station_specials_reqs_path)) then
         [ 
             {
                 special_name: string,
-                per_hour_target: int,
+                per_hour_target: int?,
+                per_show_target: int?,
                 try_top_of_hour: bool?,
                 try_show_start: bool?
             }
@@ -271,7 +273,8 @@ def get_show(thisshow) =
             [ 
                 {
                     special_name: string,
-                    per_hour_target: int,
+                    per_hour_target: int?,
+                    per_show_target: int?,
                     try_top_of_hour: bool?,
                     try_show_start: bool?
                 }
@@ -819,6 +822,7 @@ def update_specials_and_last_played_state()
             # load this special's requirements
             this_special_name = this_special_reqs.special_name # "Best Of"
             this_per_hour_target = this_special_reqs.per_hour_target ?? 0
+            this_per_show_target = this_special_reqs.per_show_target ?? 0
             this_try_top_of_hour = this_special_reqs.try_top_of_hour ?? false
             this_try_show_start = this_special_reqs.try_show_start ?? false
 

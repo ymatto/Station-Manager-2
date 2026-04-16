@@ -10,7 +10,9 @@ services:
     image: savonet/liquidsoap:v2.4.2
     command: -v /sm2/StationManager2.liq -- stationconfig.json
     ports:
-      - 1447:1447
+      # configure these for your telnet server or http endpoint ports, if used
+      - 1447:1447 # example telnet server port
+      - 1087:1087 # example http endpoints port
     # you'll typically want to point the working_dir at the volume you set below for the station
     working_dir: /station
     volumes:

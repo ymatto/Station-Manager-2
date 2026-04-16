@@ -82,6 +82,9 @@ station_telnet_server_port = stationconfig.telnet_server_port ?? 1234
 station_telnet_server_timeout = float_of_int(stationconfig.telnet_server_timeout ?? 60)
 station_telnet_server_netmask = stationconfig.telnet_server_netmask ?? "0.0.0.0"
 
+station_http_endpoints = stationconfig.http_endpoints ?? false
+station_http_endpoints_port = stationconfig.http_endpoints_port ?? 1080
+
 station_announcements_path = stationconfig.announcements_path ?? "announcements/"
 station_tts_announcements_path = stationconfig.tts_announcements_path ?? "/tmp/"
 
@@ -98,7 +101,7 @@ settings.ffmpeg.log.level := -8
 # Don't parse ID3 tags that have image or other large data, causing warnings about "string over max length" to be thrown
 settings.request.metadata_decoders.recode.exclude := ["id3v2_priv.www.amazon.com", "id3v2_priv.traktor", "priv", "apic", "pic", "metadata_block_picture", "coverart", "lyrics", "lyrics-none-eng", "unsyncedlyrics", "geob", "uslt", "cuesheet"]
 
-# Server setup
+# Telnet server setup
 if (station_telnet_server) then
     settings.server.telnet.set(station_telnet_server)
     settings.server.telnet.port.set(station_telnet_server_port)
@@ -484,10 +487,7 @@ def addtotracklog(nexttrack) =
   new_tracklog := string.concat([new_tracklog(), nexttrack, "\n"])
 end
 
-# TODO
-# change this to just take a string to add to the log
-# move the other logic to the trackend handler
-# and add a check to not bother logging if data is blank or "-" or whatever
+
 def logtrack(this_metadata) =
     if (station_tracklog_path != "") then
         artist = get_metadata_value("artist", this_metadata)
@@ -515,6 +515,18 @@ def logtrack(this_metadata) =
         end
     end
 end
+
+cover_manager = file.cover.manager(
+  id          = "radio",
+  default     = "/station/default_cover.png",
+  mime_types  = [
+    ("image/gif",  "gif"),
+    ("image/jpg",  "jpg"),
+    ("image/jpeg", "jpg"),
+    ("image/png",  "png"),
+    ("image/webp", "webp")
+  ]
+)
 
 
 # TIME FUNCTIONS FOR CONTROL BOARD
@@ -1214,11 +1226,17 @@ end
 
 # Show management functions (plus change_show queueable command)
 
+
+latest_cover_metadata = ref([])
+
 def handle_track_end (this_metadata) =
+    latest_cover_metadata := this_metadata
     update_specials_and_last_played_state() # to be safe, attempt a specials update based on the now-playing track in case this isn't a normal next-track-in-playlist-queue track that is_request_approved would pick up
     track_endtime := true # tell the command_loop to do track end things
     logtrack(this_metadata)
+    cover_manager.set(this_metadata)
 end
+
 
 # keep each show's sources stored so they only have to be created once
 show_sources = ref ([]) # the playlist sources themselves, to be assigned to current_show_source
@@ -1664,6 +1682,24 @@ server.register(namespace="station",
     "get_specials",
     station_get_specials)
 
+
+# HTTP ENDPOINTS
+
+def cover_handler(req) =
+    cover_path = request.uri(cover_manager())
+    mime       = list.assoc(default="image/jpeg", "cover_mime", latest_cover_metadata())
+    http.response(
+        status_code    = 200,
+        headers = [("Content-Type", mime),
+                    ("Access-Control-Allow-Origin", "*")],
+        data    = file.read(cover_path)
+    )
+end
+
+if (station_http_endpoints==true) then
+    # TODO add other endpoints here
+    harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/cover", cover_handler)
+end
 
 
                 

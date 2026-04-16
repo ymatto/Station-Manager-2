@@ -73,9 +73,10 @@ station_voice_type = stationconfig.voice_type ?? ""
 station_default_voice = stationconfig.default_voice ?? ""
 station_tts_server_endpoint = stationconfig.tts_server_endpoint ?? "http://host.docker.internal:3000/say"
 
-station_log_path = stationconfig.log_path ?? "logs/StationManager2.log"
-station_tracklog_path = stationconfig.tracklog_path ?? "logs/recent_tracks.log"
-station_currentshow_path = stationconfig.currentshow_path ?? "logs/current_show.log"
+station_log_path = stationconfig.log_path ?? ""
+station_tracklog_path = stationconfig.tracklog_path ?? ""
+station_tracklog_length = stationconfig.tracklog_length ?? 20
+station_currentshow_path = stationconfig.currentshow_path ?? ""
 
 station_telnet_server = stationconfig.telnet_server ?? false
 station_telnet_server_port = stationconfig.telnet_server_port ?? 1234
@@ -421,10 +422,13 @@ output.icecast(
 # metadata cache, so we can delay resolving requests, and to avoid continually looking up metadata from files themselves unnecessarily
 track_metadata_cache = ref([]) # [("/music/playlist/01-trackname.mp3", [("artist", "Big Name"), ... ]), ...]
 
-# list of readable recent tracks to dump to log
-# TODO get rid of the file logging stuff around these once we have good http endpoints
+# list of readable recent tracks to dump to log or push out on http endpoint
 recent_tracks = ref ([])
+recent_tracks_md_structs = ref ([])
 new_tracklog = ref ("")
+now_playing_metadata = ref([])
+now_playing_filtered_md_struct = ref({})
+
 
 # Get metadata for a request, from cache if possible, resolved if necessary
 def get_metadata_for_request(this_request)
@@ -488,35 +492,6 @@ def addtotracklog(nexttrack) =
   new_tracklog := string.concat([new_tracklog(), nexttrack, "\n"])
 end
 
-
-def logtrack(this_metadata) =
-    if (station_tracklog_path != "") then
-        artist = get_metadata_value("artist", this_metadata)
-        album = get_metadata_value("album", this_metadata)
-        title = get_metadata_value("title", this_metadata)
-        filename = get_metadata_value("filename", this_metadata)
-        if (title == "") then
-            log ("PLAYING: file without metadata")
-        else
-            newline="#{artist} - #{album} - #{title}"    
-            log("PLAYING: " ^ newline ^ " (" ^ filename ^ ")")       
-            recent_tracks := list.add(newline, recent_tracks())
-            if (list.length(recent_tracks()) > 20) then
-                recent_tracks := list.rev(list.tl(list.rev(recent_tracks())))
-            end
-            new_tracklog := ""
-            list.iter(addtotracklog, recent_tracks())
-            ignore(
-                file.write(
-                    data=new_tracklog(),
-                    append=false,
-                    station_tracklog_path
-                )
-            )
-        end
-    end
-end
-
 cover_manager = file.cover.manager(
   id          = "radio",
   default     = "/station/default_cover.png",
@@ -528,6 +503,52 @@ cover_manager = file.cover.manager(
     ("image/webp", "webp")
   ]
 )
+
+def logtrack(this_metadata) =
+    if (station_tracklog_path != "") then
+        artist = get_metadata_value("artist", this_metadata)
+        album = get_metadata_value("album", this_metadata)
+        title = get_metadata_value("title", this_metadata)
+        year = get_metadata_value("year", this_metadata)
+        filename = get_metadata_value("filename", this_metadata)
+        if (title == "") then
+            log ("PLAYING: file without metadata")
+        else # we have a real thing playing, rather than a blank voiceover or something - log it as appropriate
+            newline="#{artist} - #{album} - #{title}"
+            log("PLAYING: " ^ newline ^ " (" ^ filename ^ ")") 
+            # update tracking
+            now_playing_metadata := this_metadata
+            now_playing_filtered_md_struct := {
+                title  = title,
+                artist = artist,
+                album  = album,
+                year = year
+            }
+            recent_tracks_md_structs := list.add(now_playing_filtered_md_struct(), recent_tracks_md_structs())
+            if (list.length(recent_tracks_md_structs()) > station_tracklog_length) then
+                recent_tracks_md_structs := list.slice(offset=0, length=station_tracklog_length, recent_tracks_md_structs())
+            end
+            # update cover manager
+            cover_manager.set(this_metadata)
+            # update log
+            if (station_tracklog_path != "") then
+                recent_tracks := list.add(newline, recent_tracks())
+                if (list.length(recent_tracks()) > station_tracklog_length) then
+                    recent_tracks := list.rev(list.tl(list.rev(recent_tracks())))
+                end
+                new_tracklog := ""
+                list.iter(addtotracklog, recent_tracks())
+                ignore(
+                    file.write(
+                        data=new_tracklog(),
+                        append=false,
+                        station_tracklog_path
+                    )
+                )
+            end
+        end
+    end
+end
 
 
 # TIME FUNCTIONS FOR CONTROL BOARD
@@ -1228,14 +1249,12 @@ end
 # Show management functions (plus change_show queueable command)
 
 
-now_playing_metadata = ref([])
+
 
 def handle_track_end (this_metadata) =
-    now_playing_metadata := this_metadata
     update_specials_and_last_played_state() # to be safe, attempt a specials update based on the now-playing track in case this isn't a normal next-track-in-playlist-queue track that is_request_approved would pick up
     track_endtime := true # tell the command_loop to do track end things
     logtrack(this_metadata)
-    cover_manager.set(this_metadata)
 end
 
 
@@ -1299,13 +1318,15 @@ def change_show(this_show_name) =
         current_show_name := this_show_name
         current_show_longname = list.assoc(default="", this_show_name, show_longnames())
         set_voice("normal")
-        ignore(
-            file.write(
-                    data=current_show_longname,
-                    append=false,
-                    station_currentshow_path
-                )
-        )
+        if (station_currentshow_path != "") then
+            ignore(
+                file.write(
+                        data=current_show_longname,
+                        append=false,
+                        station_currentshow_path
+                    )
+            )
+        end
         this_show_specials_reqs = list.assoc(default=[], current_show_name(), show_specials_reqs())
         if this_show_specials_reqs != [] then
             log("   Using this show's own specials requirements:\n" ^ "   " ^ string(this_show_specials_reqs))
@@ -1698,16 +1719,20 @@ def cover_handler(req) =
 end
 
 def nowplaying_handler(req)
-  this_metadata = now_playing_metadata()
   http.response(
     status_code    = 200,
     headers = [("Content-Type", "application/json"),
                ("Access-Control-Allow-Origin", "*")],
-    data    = json.stringify({
-      title  = get_metadata_value("title", this_metadata),
-      artist = get_metadata_value("artist", this_metadata),
-      album  = get_metadata_value("album", this_metadata)
-    })
+    data    = json.stringify(now_playing_filtered_md_struct())
+  )
+end
+
+def recent_handler(req)
+  http.response(
+    status_code    = 200,
+    headers = [("Content-Type", "application/json"),
+               ("Access-Control-Allow-Origin", "*")],
+    data    = json.stringify(recent_tracks_md_structs())
   )
 end
 
@@ -1715,6 +1740,7 @@ if (station_http_endpoints==true) then
     # TODO add other endpoints here
     harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/cover", cover_handler)
     harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/nowplaying", nowplaying_handler)
+    harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/recent", recent_handler)
 end
 
 

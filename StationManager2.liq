@@ -160,7 +160,7 @@ log("STARTUP: Loading specials requirements...")
 #   `per_show_target`, if set, is a target number of plays for the special during the expected playtime of the show
 #   `try_top_of_hour`, if set, tries to play the special as the first thing after an hour switch
 #   `try_show_start`, if set, tries to play the special as the first thing of a new show
-# TODO ... also want to implement options for try_show_end, per_day_target, per_show_target and others
+# TODO ... also want to implement options for try_show_end, per_day_target and others
 station_specials_reqs = ref([])
 
 if (file.exists(station_specials_reqs_path)) then
@@ -544,6 +544,10 @@ def get_current_hour() =
     time.local().hour
 end
 
+def get_hour_at(this_time) = 
+    time.local(this_time).hour
+end
+
 def get_time_since_midnight() =
     this_sec = time.local().sec
     this_min = time.local().min
@@ -588,6 +592,13 @@ end
 
 
 # DJ CONTROL BOARD FUNCTIONS
+
+current_scheduled_show_name = ref ("")
+current_scheduled_show_hour = ref (0)
+current_scheduled_show_time = ref (0.0)
+next_scheduled_show_name = ref ("")
+next_scheduled_show_hour = ref (0)
+next_scheduled_show_time = ref (0.0)
 
 current_show_name = ref ("") # name of actual broadcasting show (independent of schedule - if there even is one)
 current_show_source = ref (silence) # the current show playlist source that can be monitored or controlled
@@ -827,11 +838,10 @@ def update_specials_and_last_played_state()
             this_try_show_start = this_special_reqs.try_show_start ?? false
 
             this_special_overdue_state = ref(false)
-            actual_plays = ref(0)
             
-            # TODO: add more options like perhaps try_show_end, per_day_target, per_show_target ?
+            # TODO: add more options like perhaps try_show_end, per_day_target?
             if this_try_show_start and new_show_just_started() then
-                # per_hour_target doesn't matter - it is the start of a new show so show_start requirement makes this special overdue this once
+                # other targets don't matter - it is the start of a new show so show_start requirement makes this special overdue this once
                 log("Trying to meet the new show's one-time show_start requirement for: " ^ this_special_name)
                 this_special_overdue_state := true
             elsif this_try_top_of_hour and new_show_just_started() then
@@ -839,25 +849,41 @@ def update_specials_and_last_played_state()
                 log("Trying to meet the new show's one-time top_of_hour requirement for: " ^ this_special_name)
                 this_special_overdue_state := true
             elsif this_try_top_of_hour and track_ends_in_new_hour() then
-                # per_hour_target doesn't matter - it will be top of the hour so top_of_hour requirement makes this special overdue this once
+                # other targets don't matter - it will be top of the hour so top_of_hour requirement makes this special overdue this once
                 log("Trying to meet one-time top_of_hour requirement for: " ^ this_special_name)
                 this_special_overdue_state := true
-            elsif this_per_hour_target > 0 then
-                # let's see about the per-hour target
-                req_period = 3600.0 / float_of_int(this_per_hour_target)
-                expected_time_since_hour = get_time_since_last_hour_at(time() + current_track_remaining) # at end of current track
-                target_plays = int_of_float(floor( (expected_time_since_hour + (req_period / 2.0)) / req_period ) )
-                    # important math... for example:
-                    # 1 play per hour adds target_play increment at 30 minute mark
-                    # 3 plays per hour adds target_play increments at 10, 30, and 50 minute marks
-                if (track_ends_in_new_hour()) then # play count will reset in the hour about to start
-                    actual_plays := 0
-                else # current hour's play count is valid to use
-                    actual_plays := list.assoc(default=0, this_special_name, specials_plays_this_hour())
+            else
+                if this_per_hour_target > 0 then # let's see about the per-hour target
+                    per_hour_req_period = 3600.0 / float_of_int(this_per_hour_target)
+                    expected_time_since_hour = get_time_since_last_hour_at(time() + current_track_remaining) # at end of current track
+                    target_plays_by_now_this_hour = int_of_float( floor( (expected_time_since_hour + (per_hour_req_period / 2.0)) / per_hour_req_period ) )
+                        # important math... for example:
+                        # target of 1 play per hour makes it overdue at 30 minute mark
+                        # target of 3 plays per hour makes it overdue at 10, 30, and 50 minute marks
+                    actual_plays_this_hour = ref(0)
+                    if (track_ends_in_new_hour()) then # play count will reset in the hour about to start
+                        actual_plays_this_hour := 0
+                    else # current hour's play count is valid to use
+                        actual_plays_this_hour := list.assoc(default=0, this_special_name, specials_plays_this_hour())
+                    end
+                    if target_plays_by_now_this_hour > actual_plays_this_hour() then
+                        # we're behind - make this overdue
+                        this_special_overdue_state := true
+                    end
                 end
-                if target_plays > actual_plays() then
-                    # we're behind - make this overdue
-                    this_special_overdue_state := true
+                if this_per_show_target > 0 then # let's see about the per-show target
+                    show_length = next_scheduled_show_time() - current_scheduled_show_time()
+                    per_show_req_period = show_length / float_of_int(this_per_show_target)
+                    expected_time_since_show_start = time() + current_track_remaining - current_scheduled_show_time()
+                    target_plays_by_now_this_show = int_of_float( floor( (expected_time_since_show_start + (per_show_req_period / 2.0)) / per_show_req_period ) )
+                    # similar math as above for per-hour... for example, given a 4-hour show:
+                    # target of 1 play per show makes it overdue at 2 hour mark
+                    # target of 3 plays per show makes it overdue at 40, 120, and 200 minute marks
+                    actual_plays_this_show = list.assoc(default=0, this_special_name, specials_plays_this_show()) # unlike hourly logic, don't assume show will actually change - change_show will take care of things if it does
+                    if target_plays_by_now_this_show > actual_plays_this_show then
+                        # we're behind - make this overdue
+                        this_special_overdue_state := true
+                    end
                 end
             end 
 
@@ -1646,12 +1672,7 @@ server.register(namespace="station",
 
 # SET UP AUTOMATED DYNAMIC SOURCE CONTROL VIA SCHEDULE – AKA AUTO-DJ
 
-current_scheduled_show_name = ref ("")
-current_scheduled_show_hour = ref (0)
-current_scheduled_show_time = ref (0.0)
-next_scheduled_show_name = ref ("")
-next_scheduled_show_hour = ref (0)
-next_scheduled_show_time = ref (0.0)
+
 
 def update_current_next_shows () =
 
@@ -1845,6 +1866,5 @@ end
 log("STARTUP: initiating AUTO-DJ...")
 
 thread.run.recurrent(delay=5.0, auto_dj_loop) # start it up!! # TODO make starting it up optional
-
 
 

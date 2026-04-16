@@ -422,6 +422,7 @@ output.icecast(
 track_metadata_cache = ref([]) # [("/music/playlist/01-trackname.mp3", [("artist", "Big Name"), ... ]), ...]
 
 # list of readable recent tracks to dump to log
+# TODO get rid of the file logging stuff around these once we have good http endpoints
 recent_tracks = ref ([])
 new_tracklog = ref ("")
 
@@ -1227,10 +1228,10 @@ end
 # Show management functions (plus change_show queueable command)
 
 
-latest_cover_metadata = ref([])
+now_playing_metadata = ref([])
 
 def handle_track_end (this_metadata) =
-    latest_cover_metadata := this_metadata
+    now_playing_metadata := this_metadata
     update_specials_and_last_played_state() # to be safe, attempt a specials update based on the now-playing track in case this isn't a normal next-track-in-playlist-queue track that is_request_approved would pick up
     track_endtime := true # tell the command_loop to do track end things
     logtrack(this_metadata)
@@ -1687,7 +1688,7 @@ server.register(namespace="station",
 
 def cover_handler(req) =
     cover_path = request.uri(cover_manager())
-    mime       = list.assoc(default="image/jpeg", "cover_mime", latest_cover_metadata())
+    mime       = list.assoc(default="image/jpeg", "cover_mime", now_playing_metadata())
     http.response(
         status_code    = 200,
         headers = [("Content-Type", mime),
@@ -1696,9 +1697,24 @@ def cover_handler(req) =
     )
 end
 
+def nowplaying_handler(req)
+  this_metadata = now_playing_metadata()
+  http.response(
+    status_code    = 200,
+    headers = [("Content-Type", "application/json"),
+               ("Access-Control-Allow-Origin", "*")],
+    data    = json.stringify({
+      title  = get_metadata_value("title", this_metadata),
+      artist = get_metadata_value("artist", this_metadata),
+      album  = get_metadata_value("album", this_metadata)
+    })
+  )
+end
+
 if (station_http_endpoints==true) then
     # TODO add other endpoints here
     harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/cover", cover_handler)
+    harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/nowplaying", nowplaying_handler)
 end
 
 

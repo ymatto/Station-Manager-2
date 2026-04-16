@@ -1708,6 +1708,7 @@ server.register(namespace="station",
 # HTTP ENDPOINTS
 
 def cover_handler(req) =
+    ignore(req)
     cover_path = request.uri(cover_manager())
     mime       = list.assoc(default="image/jpeg", "cover_mime", now_playing_metadata())
     http.response(
@@ -1719,21 +1720,23 @@ def cover_handler(req) =
 end
 
 def nowplaying_handler(req)
-  http.response(
-    status_code    = 200,
-    headers = [("Content-Type", "application/json"),
-               ("Access-Control-Allow-Origin", "*")],
-    data    = json.stringify(now_playing_filtered_md_struct())
-  )
+    ignore(req)
+    http.response(
+        status_code    = 200,
+        headers = [("Content-Type", "application/json"),
+                    ("Access-Control-Allow-Origin", "*")],
+        data    = json.stringify(now_playing_filtered_md_struct())
+    )
 end
 
 def recent_handler(req)
-  http.response(
-    status_code    = 200,
-    headers = [("Content-Type", "application/json"),
-               ("Access-Control-Allow-Origin", "*")],
-    data    = json.stringify(recent_tracks_md_structs())
-  )
+    ignore(req)
+    http.response(
+        status_code    = 200,
+        headers = [("Content-Type", "application/json"),
+                    ("Access-Control-Allow-Origin", "*")],
+        data    = json.stringify(recent_tracks_md_structs())
+    )
 end
 
 if (station_http_endpoints==true) then

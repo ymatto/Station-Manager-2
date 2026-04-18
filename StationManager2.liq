@@ -85,6 +85,7 @@ station_telnet_server_netmask = stationconfig.telnet_server_netmask ?? "0.0.0.0"
 
 station_http_endpoints = stationconfig.http_endpoints ?? false
 station_http_endpoints_port = stationconfig.http_endpoints_port ?? 1080
+station_cover_default_path = stationconfig.cover_default_path ?? ""
 
 station_announcements_path = stationconfig.announcements_path ?? "announcements/"
 station_tts_announcements_path = stationconfig.tts_announcements_path ?? "/tmp/"
@@ -493,8 +494,8 @@ def addtotracklog(nexttrack) =
 end
 
 cover_manager = file.cover.manager(
-  id          = "radio",
-  default     = "/station/default_cover.png",
+  id          = "current",
+  default     = station_cover_default_path,
   mime_types  = [
     ("image/gif",  "gif"),
     ("image/jpg",  "jpg"),

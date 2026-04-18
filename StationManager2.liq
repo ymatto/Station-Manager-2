@@ -2,10 +2,13 @@
 # If not running this from the commandline (such as launchd), make sure to include '--' before the configuration file argument
 # ie.: /Users/omm/Basscadet/StationManager2.liq -- stationconfig.json
 
+# Designed to run with Liquidsoap v2.4.2
+
+
 #<
 MIT License
 
-Copyright (c) 2025 Matthew Hine
+Copyright (c) 2026 Matthew Hine
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -25,8 +28,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 >#
-
-# Designed to run with Liquidsoap v2.4
 
 
 
@@ -72,14 +73,19 @@ station_voice_type = stationconfig.voice_type ?? ""
 station_default_voice = stationconfig.default_voice ?? ""
 station_tts_server_endpoint = stationconfig.tts_server_endpoint ?? "http://host.docker.internal:3000/say"
 
-station_log_path = stationconfig.log_path ?? "logs/StationManager2.log"
-station_tracklog_path = stationconfig.tracklog_path ?? "logs/recent_tracks.log"
-station_currentshow_path = stationconfig.currentshow_path ?? "logs/current_show.log"
+station_log_path = stationconfig.log_path ?? ""
+station_tracklog_path = stationconfig.tracklog_path ?? ""
+station_tracklog_length = stationconfig.tracklog_length ?? 20
+station_currentshow_path = stationconfig.currentshow_path ?? ""
 
 station_telnet_server = stationconfig.telnet_server ?? false
 station_telnet_server_port = stationconfig.telnet_server_port ?? 1234
 station_telnet_server_timeout = float_of_int(stationconfig.telnet_server_timeout ?? 60)
 station_telnet_server_netmask = stationconfig.telnet_server_netmask ?? "0.0.0.0"
+
+station_http_endpoints = stationconfig.http_endpoints ?? false
+station_http_endpoints_port = stationconfig.http_endpoints_port ?? 1080
+station_cover_default_path = stationconfig.cover_default_path ?? ""
 
 station_announcements_path = stationconfig.announcements_path ?? "announcements/"
 station_tts_announcements_path = stationconfig.tts_announcements_path ?? "/tmp/"
@@ -94,10 +100,10 @@ end
 settings.ffmpeg.log.verbosity.set("quiet")
 settings.ffmpeg.log.level := -8
 
-# Don't parse dumb ID3 tags that have image data and throw errors
-settings.request.metadata_decoders.recode.exclude := ["id3v2_priv.www.amazon.com", "priv", "apic", "pic", "metadata_block_picture", "coverart"]
+# Don't parse ID3 tags that have image or other large data, causing warnings about "string over max length" to be thrown
+settings.request.metadata_decoders.recode.exclude := ["id3v2_priv.www.amazon.com", "id3v2_priv.traktor", "priv", "apic", "pic", "metadata_block_picture", "coverart", "lyrics", "lyrics-none-eng", "unsyncedlyrics", "geob", "uslt", "cuesheet"]
 
-# Server setup
+# Telnet server setup
 if (station_telnet_server) then
     settings.server.telnet.set(station_telnet_server)
     settings.server.telnet.port.set(station_telnet_server_port)
@@ -156,17 +162,22 @@ log("STARTUP: Loading specials requirements...")
 # This is your definition for when or how often specials should ideally be played
 #   `special_name` refers to one of the specials you defined in station_specials
 #   `per_hour_target`, if set, is a target number of plays for the special within a given hour
+#   `per_show_target`, if set, is a target number of plays for the special during the expected playtime of the show
 #   `try_top_of_hour`, if set, tries to play the special as the first thing after an hour switch
-# TODO ... also want to implement options for `try_show_start` and `try_show_end`
+#   `try_show_start`, if set, tries to play the special as the first thing of a new show
+# TODO ... also want to implement options for try_show_end, per_day_target and others
 station_specials_reqs = ref([])
+
 if (file.exists(station_specials_reqs_path)) then
     station_specials_reqs_file = file.contents(station_specials_reqs_path)
     let json.parse ( new_station_specials_reqs :
         [ 
             {
                 special_name: string,
-                per_hour_target: int,
-                try_top_of_hour: bool
+                per_hour_target: int?,
+                per_show_target: int?,
+                try_top_of_hour: bool?,
+                try_show_start: bool?
             }
         ] ) = station_specials_reqs_file
     station_specials_reqs := new_station_specials_reqs
@@ -185,11 +196,13 @@ log("STARTUP: Loading non-repetition requirements...")
 #   `dont_repeat_within_last` is one of a fixed list of options for the period during which the tag should not be repeated:
 #       track
 #       15 minutes
+#       30 minutes
 #       hour
 #       3 hours
 #       12 hours
 #       day
 station_nonrepetition_reqs = ref([])
+
 if (file.exists(station_nonrepetition_reqs_path)) then
     station_nonrepetition_reqs_file = file.contents(station_nonrepetition_reqs_path)
     let json.parse ( new_station_nonrepetition_reqs :
@@ -222,6 +235,8 @@ show_voices = ref ([]) # ("Beats", "Whisper"), ("Groovestyle", "Ava"), ...
 show_signon_announcements = ref ([])
 show_signoff_announcements = ref ([])
 show_shuffle_modes = ref ([])
+show_specials_reqs = ref([]) # ("Beats", [<same format as station_specials_reqs>]), (...)
+show_nonrepetition_reqs = ref([]) # ("Beats", [<same format as station_nonrepetition_reqs>]), (...)
 
 showconfig_file = file.contents(station_showconfig_path)
 
@@ -233,7 +248,9 @@ let json.parse (show_list : [(
         DJ_voice: string?,
         signon_announcement: string?, 
         signoff_announcement: string?,
-        shuffle_mode: string?  
+        shuffle_mode: string?,
+        specials_reqs_path: string?,
+        nonrepetition_reqs_path: string?
     }
 )] as json.object ) = showconfig_file
 
@@ -254,10 +271,60 @@ def get_show(thisshow) =
     show_signoff_announcements := list.append([(thisshowkey, thissignoffannouncement)], show_signoff_announcements())
     thisshuffle_mode = thisshowdata.shuffle_mode ?? "songs" # TODO: make actually do something
     show_shuffle_modes := list.append([(thisshowkey, thisshuffle_mode)], show_shuffle_modes())
+    thisspecials_reqs_path = thisshowdata.specials_reqs_path ?? ""
+    if file.exists(thisspecials_reqs_path) then # this show has its own specials_reqs file to override the station's default
+        thisspecials_reqs_file = file.contents(thisspecials_reqs_path)
+        let json.parse ( thisspecials_reqs :
+            [ 
+                {
+                    special_name: string,
+                    per_hour_target: int?,
+                    per_show_target: int?,
+                    try_top_of_hour: bool?,
+                    try_show_start: bool?
+                }
+            ] ) = thisspecials_reqs_file
+        show_specials_reqs := list.append([(thisshowkey, thisspecials_reqs)], show_specials_reqs())
+    end
+    thisnonrepetition_reqs_path = thisshowdata.nonrepetition_reqs_path ?? ""
+    if file.exists(thisnonrepetition_reqs_path) then # this show has its own nonrepetition_reqs file to override the station's default
+        thisnonrepetition_reqs_file = file.contents(thisnonrepetition_reqs_path)
+        let json.parse ( thisnonrepetition_reqs :
+            [ 
+                {
+                    tag_name: string,
+                    dont_repeat_within_last: string
+                }
+            ] ) = thisnonrepetition_reqs_file
+        show_nonrepetition_reqs := list.append([(thisshowkey, thisnonrepetition_reqs)], show_nonrepetition_reqs())
+    end
 end
 
 list.iter(get_show, show_list)
 
+
+
+# LOAD list of relevant metadata tags that are used in any nonrepetition requirements, for usage tracking
+relevant_nonrepetition_tags = ref([])
+
+def include_all_tags_from_nonrep_requirements(this_nonrep_requirements) =
+    def include_tag_from_req(this_nonrep_req) =
+        this_tag = this_nonrep_req.tag_name
+        if not list.exists(fun(x) -> x == this_tag, relevant_nonrepetition_tags()) then
+            relevant_nonrepetition_tags := list.add(this_tag, relevant_nonrepetition_tags())
+        end
+    end
+    list.iter(include_tag_from_req, this_nonrep_requirements)
+end
+include_all_tags_from_nonrep_requirements(station_nonrepetition_reqs())
+def include_all_tags_from_show_nonrep_requirements(this_show_nonrep_req) =
+    this_reqs = snd(this_show_nonrep_req)
+    include_all_tags_from_nonrep_requirements(this_reqs)
+end
+list.iter(include_all_tags_from_show_nonrep_requirements, show_nonrepetition_reqs())
+# log("Relevant tags for nonrepetition rules:\n" ^ string(relevant_nonrepetition_tags()))
+
+    
 
 
 # LOAD SHOW SCHEDULE
@@ -306,8 +373,11 @@ list.iter(get_showschedule, showschedule_list)
 
 log("STARTUP: setting up dynamic broadcast...")
 
+# Create a single blank source that we can use everywhere else, rather than constantly spinning out new blank sources
+silence = blank()
+
 # Create current_output_source. Changing source contents of this will change what is broadcast, using the dynamic broadcast_source
-current_output_source = ref(blank())
+current_output_source = ref(silence)
 
 # Handler to get the current dynamic source
 def get_source_for_broadcast() =
@@ -353,9 +423,13 @@ output.icecast(
 # metadata cache, so we can delay resolving requests, and to avoid continually looking up metadata from files themselves unnecessarily
 track_metadata_cache = ref([]) # [("/music/playlist/01-trackname.mp3", [("artist", "Big Name"), ... ]), ...]
 
-# list of readable recent tracks to dump to log
+# list of readable recent tracks to dump to log or push out on http endpoint
 recent_tracks = ref ([])
+recent_tracks_md_structs = ref ([])
 new_tracklog = ref ("")
+now_playing_metadata = ref([])
+now_playing_filtered_md_struct = ref({})
+
 
 # Get metadata for a request, from cache if possible, resolved if necessary
 def get_metadata_for_request(this_request)
@@ -419,26 +493,61 @@ def addtotracklog(nexttrack) =
   new_tracklog := string.concat([new_tracklog(), nexttrack, "\n"])
 end
 
+cover_manager = file.cover.manager(
+  id          = "current",
+  default     = station_cover_default_path,
+  mime_types  = [
+    ("image/gif",  "gif"),
+    ("image/jpg",  "jpg"),
+    ("image/jpeg", "jpg"),
+    ("image/png",  "png"),
+    ("image/webp", "webp")
+  ]
+)
+
 def logtrack(this_metadata) =
-    # TODO (maybe, if still relevant) don't log if the info is blank or "-" or whatever at show changes
     if (station_tracklog_path != "") then
         artist = get_metadata_value("artist", this_metadata)
         album = get_metadata_value("album", this_metadata)
         title = get_metadata_value("title", this_metadata)
-        newline="#{artist} - #{album} - #{title}"
-        recent_tracks := list.add(newline, recent_tracks())
-        if (list.length(recent_tracks()) > 20) then
-            recent_tracks := list.rev(list.tl(list.rev(recent_tracks())))
+        year = get_metadata_value("year", this_metadata)
+        filename = get_metadata_value("filename", this_metadata)
+        if (title == "") then
+            log ("PLAYING: file without metadata")
+        else # we have a real thing playing, rather than a blank voiceover or something - log it as appropriate
+            newline="#{artist} - #{album} - #{title}"
+            log("PLAYING: " ^ newline ^ " (" ^ filename ^ ")") 
+            # update tracking
+            now_playing_metadata := this_metadata
+            now_playing_filtered_md_struct := {
+                title  = title,
+                artist = artist,
+                album  = album,
+                year = year
+            }
+            recent_tracks_md_structs := list.add(now_playing_filtered_md_struct(), recent_tracks_md_structs())
+            if (list.length(recent_tracks_md_structs()) > station_tracklog_length) then
+                recent_tracks_md_structs := list.slice(offset=0, length=station_tracklog_length, recent_tracks_md_structs())
+            end
+            # update cover manager
+            cover_manager.set(this_metadata)
+            # update log
+            if (station_tracklog_path != "") then
+                recent_tracks := list.add(newline, recent_tracks())
+                if (list.length(recent_tracks()) > station_tracklog_length) then
+                    recent_tracks := list.rev(list.tl(list.rev(recent_tracks())))
+                end
+                new_tracklog := ""
+                list.iter(addtotracklog, recent_tracks())
+                ignore(
+                    file.write(
+                        data=new_tracklog(),
+                        append=false,
+                        station_tracklog_path
+                    )
+                )
+            end
         end
-        new_tracklog := ""
-        list.iter(addtotracklog, recent_tracks())
-        ignore(
-            file.write(
-                data=new_tracklog(),
-                append=false,
-                station_tracklog_path
-            )
-        )
     end
 end
 
@@ -468,6 +577,10 @@ end
 
 def get_current_hour() =
     time.local().hour
+end
+
+def get_hour_at(this_time) = 
+    time.local(this_time).hour
 end
 
 def get_time_since_midnight() =
@@ -515,12 +628,20 @@ end
 
 # DJ CONTROL BOARD FUNCTIONS
 
-current_show_name = ref ("") # name of actual broadcasting show (independent of schedule - if there even is one)
-current_show_source = ref (blank()) # the current show playlist source that can be monitored or controlled
-current_voice = ref ("") # name of current voice to use for synthesized DJ statements
+current_scheduled_show_name = ref ("")
+current_scheduled_show_hour = ref (0)
+current_scheduled_show_time = ref (0.0)
+next_scheduled_show_name = ref ("")
+next_scheduled_show_hour = ref (0)
+next_scheduled_show_time = ref (0.0)
 
-fadeout_trackend = ref (false)
-fadeout_instant = ref (false)
+current_show_name = ref ("") # name of actual broadcasting show (independent of schedule - if there even is one)
+current_show_source = ref (silence) # the current show playlist source that can be monitored or controlled
+current_voice = ref ("") # name of current voice to use for synthesized DJ statements
+current_specials_reqs = ref([])
+current_nonrepetition_reqs = ref([])
+
+pause_playback = ref (false)
 
 track_endtime = ref (false)
 
@@ -532,10 +653,15 @@ pre_trackend_command_queue = ref ([]) # [([commandname, arg], exec_time_before_t
 specials_req_overdue_states = ref([]) # [ ("Best Of", false), (...) ]
 overdue_special_names = ref([]) # [ "Best Of", "90s Jams", ... ]
 specials_hour = ref(time.local().hour)
-specials_plays_this_hour = ref([]) # [ ("Best Of", 3), (...) ] - resets at the hour
+specials_plays_this_hour = ref([]) # [ ("Best Of", 3), (...) ] - resets each hour
+specials_show_name = ref("")
+specials_plays_this_show = ref([]) # [ ("Best Of", 3), (...) ] - resets when a new show has started
+specials_plays_last_show = ref([]) # [ ("Best Of", 3), (...) ] - updated when a new show has started, with the previous show's specials
 specials_day = ref(time.local().day)
-specials_plays_today = ref([]) # [ ("Best Of", 3), (...) ] - resets at midnight
+specials_plays_today = ref([]) # [ ("Best Of", 3), (...) ] - resets when a new day has started
+specials_plays_yesterday = ref([]) # [ ("Best Of", 3), (...) ] - updated when a new day has started, with the previous day's specials
 specials_plays_continuous = ref([]) # [ ("Best Of", 3), (...) ] - never resets
+specials_plays_continuous_by_show = ref([]) # [ ("Hiphop", [ ("Best Of", 3), (...) ] ), (...) ] - never resets
 
 # keep a cache of the specials each track matches to avoid repeated complicated analysis of metadata
 track_special_matches_cache = ref([])
@@ -644,118 +770,180 @@ def classify_track(this_metadata)
     end
 end
 
+# keep track of the last track we logged the specials last played state for
+last_current_track_logged = ref("")
 
-# Keep track of some things *between calls* to is_request_approved, so we can be smarter when churning through request rejections
-last_current_track_checked = ref("")
-number_request_checks = ref(0)
-time_request_check_start = ref(0.0)
+# big function to see what specials state we'll be in, considering the currently-playing track
+# intended to be called just after a track has started playing, avoiding redundant tallying if called more than once during a track
+def update_specials_and_last_played_state()
+    # get the playing track
+    current_track_metadata = current_show_source().last_metadata() ?? []
+    current_track_remaining = current_show_source().remaining()
+    current_track_filename = current_track_metadata["filename"]
+    # log("Updating specials status with:  " ^ string(current_track_filename) ^ " with remaining time " ^ string(current_track_remaining))
 
-# Called as source's check_next - decide if the next request should be played or not based on specials and repetition rules
-def is_request_approved(req) =
+    track_ends_in_new_hour = ref(false)
+    new_show_just_started = ref(false)
 
-    # Find out what the proposed request to play next is and consider its suitability
-    next_request_filename = request.uri(req)
-    next_request_metadata = ref([]) # don't get it until we know it's a valid file
+    def increment_specials_plays(this_special_name)
+        this_hour_playcount = list.assoc(default=0, this_special_name, specials_plays_this_hour())
+        specials_plays_this_hour := list.add((this_special_name, this_hour_playcount + 1), list.assoc.remove(this_special_name, specials_plays_this_hour()))
+        this_show_playcount = list.assoc(default=0, this_special_name, specials_plays_this_show())
+        specials_plays_this_show := list.add((this_special_name, this_show_playcount + 1), list.assoc.remove(this_special_name, specials_plays_this_show()))
+        today_playcount = list.assoc(default=0, this_special_name, specials_plays_today())
+        specials_plays_today := list.add((this_special_name, today_playcount + 1), list.assoc.remove(this_special_name, specials_plays_today()))
+        continuous_playcount = list.assoc(default=0, this_special_name, specials_plays_continuous())
+        specials_plays_continuous := list.add((this_special_name, continuous_playcount + 1), list.assoc.remove(this_special_name, specials_plays_continuous()))
+        specials_plays_continuous_by_this_show = list.assoc(default=[], current_show_name(), specials_plays_continuous_by_show())
+        continuous_by_this_show_playcount = list.assoc(default=0, this_special_name, specials_plays_continuous_by_this_show)
+        updated_specials_plays_continuous_by_this_show = list.add((this_special_name, continuous_by_this_show_playcount + 1), list.assoc.remove(this_special_name, specials_plays_continuous_by_this_show))
+        specials_plays_continuous_by_show := list.add((current_show_name(), updated_specials_plays_continuous_by_this_show), list.assoc.remove(current_show_name(), specials_plays_continuous_by_show()))
+    end
 
-    # big function to see what specials state we'll be in, considering the currently playing track **at the time when it finishes**
-    # intended to be called just after a track has started playing, although it does avoid redundant tallying if called more than once during a track
-    def update_specials_and_last_played_state()
-        # get the playing track (likely just started as the next playlist request)
-        current_track_metadata = current_show_source().last_metadata() ?? []
-        current_track_remaining = source.remaining(current_show_source())
-        current_track_filename = current_track_metadata["filename"]
+    # if it is a new hour/day/show now, clear specials tracking for the past and update current times so we register this track's specials correctly
+    now_time = time()
+    now_hour = time.local(now_time).hour
+    now_day = time.local(now_time).day
+    if  now_hour != specials_hour() then
+        log("Resetting specials play counts for a new hour.")
+        specials_plays_this_hour := [] # reset for new hour
+        specials_hour := now_hour
+    end
+    if now_day != specials_day() then
+        log("Resetting specials play count for a new day.\nTotal specials plays today: " ^ string(specials_plays_today()) ^ "\nSpecials plays since launch: " ^ string(specials_plays_continuous()))
+        specials_plays_yesterday := specials_plays_today()
+        specials_plays_today := []
+        specials_day := now_day
+    end
+    if specials_show_name() != current_show_name() then
+        log("Resetting specials play counts for a new show.")
+        specials_plays_last_show := specials_plays_this_show()
+        specials_plays_this_show := [] # reset for new show
+        specials_plays_this_hour := [] # also reset the hour tracking - if a show is manually changed mid-hour, previous plays this hour don't really matter
+        specials_show_name := current_show_name()
+        new_show_just_started := true # in this case, we're probably picking the first track of the new show and we want to run the update below even if we've already checked the playing track
+    else
+        new_show_just_started := false
+    end
 
-        top_of_hour_play = ref(false)
+    if ( (last_current_track_logged() != current_track_filename) or new_show_just_started() ) then # otherwise nothing further to do
 
-        def increment_specials_plays(this_special_name)
-            this_hour_playcount = list.assoc(default=0, this_special_name, specials_plays_this_hour())
-            specials_plays_this_hour := list.add((this_special_name, this_hour_playcount + 1), list.assoc.remove(this_special_name, specials_plays_this_hour()))
-            today_playcount = list.assoc(default=0, this_special_name, specials_plays_today())
-            specials_plays_today := list.add((this_special_name, today_playcount + 1), list.assoc.remove(this_special_name, specials_plays_today()))
-            continuous_playcount = list.assoc(default=0, this_special_name, specials_plays_continuous())
-            specials_plays_continuous := list.add((this_special_name, continuous_playcount + 1), list.assoc.remove(this_special_name, specials_plays_continuous()))
-        end
+        # update state of specials and repetitions, only if we haven't done so for the playing track
+        if last_current_track_logged() != current_track_filename then # only do this once per track switch
 
-        # update state of specials and repetitions, if we haven't done so for the playing track
-        if last_current_track_checked() != current_track_filename then # only do this once per track switch
-            
-            last_current_track_checked := current_track_filename
+            last_current_track_logged := current_track_filename
+
+            # find out if track will end in a new hour of specials or not
+            time_at_track_end = time() + current_track_remaining
+            hour_of_track_end = time.local(time_at_track_end).hour
+            if specials_hour() != hour_of_track_end then
+                track_ends_in_new_hour := true
+            else
+                track_ends_in_new_hour := false
+            end
 
             # get the specials the playing track matches
             track_special_names = classify_track(current_track_metadata)
+
             # increment specials play counts with the the track_special_names, for the *current* time
             list.iter(increment_specials_plays, track_special_names)
             log("Updated specials play count for the " ^ string(specials_hour()) ^ ":00 hour with track " ^ current_track_filename ^ "\n    " ^ string(specials_plays_this_hour()))
 
-            # if it will be a new hour at the *end* of this track, clear specials tracking for last hour
-            # and reset current hour so we register this track's specials toward next hour
-            time_at_track_end = time() + current_track_remaining
-            hour_of_track_end = time.local(time_at_track_end).hour
-            day_of_track_end = time.local(time_at_track_end).day
-            if specials_hour() != hour_of_track_end then
-                log("Next track will start in a new hour of specials!")
-                specials_req_overdue_states := []
-                specials_plays_this_hour := []
-                specials_hour := hour_of_track_end
-                top_of_hour_play := true
-            else
-                top_of_hour_play := false
-            end
-            if specials_day() != day_of_track_end then
-                log("Next track will start in a new day!\nTotal specials plays today: " ^ string(specials_plays_today()) ^ "\nSpecials plays since launch: " ^ string(specials_plays_continuous()))
-                specials_plays_today := []
-                specials_day := day_of_track_end
-            end
-
-            # update specials_req_overdue_states **for time at the expected end of current track**
-
-            # iterator to figure out the overdue status of a given special requirement
-            def get_special_state(this_special_reqs)
-
-                this_special_name = this_special_reqs.special_name # "Best Of"
-                this_per_hour_target = this_special_reqs.per_hour_target ?? 0
-                this_try_top_of_hour = this_special_reqs.try_top_of_hour ?? false
-                this_special_overdue_state = ref(false)
-                
-                # TODO: add more options like perhaps try_show_end, try_show_start, per_day_target, per_show_target ?
-                if this_try_top_of_hour and top_of_hour_play() then
-                    # per_hour_target doesn't matter - top_of_hour requirement makes this special immediately overdue
-                    this_special_overdue_state := true
-                elsif this_per_hour_target > 0 then
-                    # let's see about the per-hour target
-                    req_period = 3600.0 / float_of_int(this_per_hour_target)
-                    expected_time_since_hour = get_time_since_last_hour_at(time() + current_track_remaining) # at end of current track
-                    target_plays = int_of_float(floor( (expected_time_since_hour + (req_period / 2.0)) / req_period ) )
-                        # important math... for example:
-                        # 1 play per hour adds target_play increment at 30 minute mark
-                        # 3 plays per hour adds target_play increments at 10, 30, and 50 minute marks
-                    actual_plays = list.assoc(default=0, this_special_name, specials_plays_this_hour())
-                    if target_plays > actual_plays then
-                        # we're behind - make this overdue
-                        this_special_overdue_state := true
-                    end
-                end 
-
-                (this_special_name, this_special_overdue_state())
-            end
-
-            new_specials_overdue_states = list.map(get_special_state, station_specials_reqs())
-            specials_req_overdue_states := new_specials_overdue_states
-
-            # Update last_plays_cache based on current_track's metadata
+            # update last_plays_cache based on current_track's metadata
             # log("Updating last play times with: " ^ current_track_filename)
-            def get_updated_last_plays_for_each_required_tag_name(this_nonrepetition_req)
-                this_tag_name = this_nonrepetition_req.tag_name
+            def get_updated_last_plays_for_each_required_tag_name(this_tag_name)
                 this_last_plays = list.assoc(default=[], this_tag_name, last_plays_cache())
 
                 tag_of_current_track = list.assoc(default="", this_tag_name, current_track_metadata)
                 updated_this_last_plays = list.add((tag_of_current_track, time()), list.assoc.remove(tag_of_current_track, this_last_plays))
                 (this_tag_name, updated_this_last_plays)
             end
-
-            last_plays_cache := list.map(get_updated_last_plays_for_each_required_tag_name, station_nonrepetition_reqs())
+            last_plays_cache := list.map(get_updated_last_plays_for_each_required_tag_name, relevant_nonrepetition_tags())
         end
+
+        # now update specials_req_overdue_states for time at the expected END of current track (re-run this if a new show has started, changing the requirements)
+        
+        # iterator to figure out the overdue status of a given special requirement, at the *end* of the current track
+        def get_special_state(this_special_reqs)
+            # load this special's requirements
+            this_special_name = this_special_reqs.special_name # "Best Of"
+            this_per_hour_target = this_special_reqs.per_hour_target ?? 0
+            this_per_show_target = this_special_reqs.per_show_target ?? 0
+            this_try_top_of_hour = this_special_reqs.try_top_of_hour ?? false
+            this_try_show_start = this_special_reqs.try_show_start ?? false
+
+            this_special_overdue_state = ref(false)
+            
+            # TODO: add more options like perhaps try_show_end, per_day_target?
+            if this_try_show_start and new_show_just_started() then
+                # other targets don't matter - it is the start of a new show so show_start requirement makes this special overdue this once
+                log("Trying to meet the new show's one-time show_start requirement for: " ^ this_special_name)
+                this_special_overdue_state := true
+            elsif this_try_top_of_hour and new_show_just_started() then
+                # no show_start requirement set, but if there's a try_top_of_hour and the show just started, go ahead and use it (probably first of hour)
+                log("Trying to meet the new show's one-time top_of_hour requirement for: " ^ this_special_name)
+                this_special_overdue_state := true
+            elsif this_try_top_of_hour and track_ends_in_new_hour() then
+                # other targets don't matter - it will be top of the hour so top_of_hour requirement makes this special overdue this once
+                log("Trying to meet one-time top_of_hour requirement for: " ^ this_special_name)
+                this_special_overdue_state := true
+            else
+                if this_per_hour_target > 0 then # let's see about the per-hour target
+                    per_hour_req_period = 3600.0 / float_of_int(this_per_hour_target)
+                    expected_time_since_hour = get_time_since_last_hour_at(time() + current_track_remaining) # at end of current track
+                    target_plays_by_now_this_hour = int_of_float( floor( (expected_time_since_hour + (per_hour_req_period / 2.0)) / per_hour_req_period ) )
+                        # important math... for example:
+                        # target of 1 play per hour makes it overdue at 30 minute mark
+                        # target of 3 plays per hour makes it overdue at 10, 30, and 50 minute marks
+                    actual_plays_this_hour = ref(0)
+                    if (track_ends_in_new_hour()) then # play count will reset in the hour about to start
+                        actual_plays_this_hour := 0
+                    else # current hour's play count is valid to use
+                        actual_plays_this_hour := list.assoc(default=0, this_special_name, specials_plays_this_hour())
+                    end
+                    if target_plays_by_now_this_hour > actual_plays_this_hour() then
+                        # we're behind - make this overdue
+                        this_special_overdue_state := true
+                    end
+                end
+                if this_per_show_target > 0 then # let's see about the per-show target
+                    show_length = next_scheduled_show_time() - current_scheduled_show_time()
+                    per_show_req_period = show_length / float_of_int(this_per_show_target)
+                    expected_time_since_show_start = time() + current_track_remaining - current_scheduled_show_time()
+                    target_plays_by_now_this_show = int_of_float( floor( (expected_time_since_show_start + (per_show_req_period / 2.0)) / per_show_req_period ) )
+                    # similar math as above for per-hour... for example, given a 4-hour show:
+                    # target of 1 play per show makes it overdue at 2 hour mark
+                    # target of 3 plays per show makes it overdue at 40, 120, and 200 minute marks
+                    actual_plays_this_show = list.assoc(default=0, this_special_name, specials_plays_this_show()) # unlike hourly logic, don't assume show will actually change - change_show will take care of things if it does
+                    if target_plays_by_now_this_show > actual_plays_this_show then
+                        # we're behind - make this overdue
+                        this_special_overdue_state := true
+                    end
+                end
+            end 
+
+            # return the status of the special
+            (this_special_name, this_special_overdue_state())
+        end
+
+        new_specials_overdue_states = list.map(get_special_state, current_specials_reqs())
+        specials_req_overdue_states := new_specials_overdue_states
     end
+
+end
+
+
+# Keep track of some things *between calls* to is_request_approved, so we can be smarter when churning through request rejections
+number_request_checks = ref(0)
+time_request_check_start = ref(0.0)
+
+# Called as source's check_next - decide if the next request should be played or not based on specials and repetition rules
+# TODO - Can this be made even more efficient, to incur less latency?
+def is_request_approved(req) =
+
+    # Find out what the proposed request to play next is and consider its suitability
+    next_request_filename = request.uri(req)
+    next_request_metadata = ref([]) # don't get it until we know it's a valid file
 
     def return_special_name_if_overdue(this_special_req_overdue_state)
          let (special_name, state) = this_special_req_overdue_state
@@ -790,6 +978,8 @@ def is_request_approved(req) =
         else
             if this_dont_repeat_within_last == "15 minutes" then
                 within_time := 900.0
+            elsif this_dont_repeat_within_last == "30 minutes" then
+                within_time := 1800.0
             elsif this_dont_repeat_within_last == "hour" then
                 within_time := 3600.0
             elsif this_dont_repeat_within_last == "3 hours" then
@@ -815,8 +1005,11 @@ def is_request_approved(req) =
 
     # make sure specials state is correct before looking at anything else, but don't repeat this if we've already done it at this track change
     if number_request_checks() < 1 then
+        # NOTE - This pause is annoying, but a better solution requires keeping track of metadata ourselves in a way that seems maybe even more error prone
+        thread.pause(0.1) # pause for a moment to make sure metadata of the newly-playing track is available on last_metadata
+
         time_request_check_start := time() # start the clock on checks
-        update_specials_and_last_played_state()
+        update_specials_and_last_played_state() # since we're just starting to look for a next track, check that specials are updated for the newly-playing track
         # get list of the names of overdue requirements
         overdue_special_names := list.filter_map(return_special_name_if_overdue, specials_req_overdue_states())
         log("Overdue specials at end of this track: " ^ string(overdue_special_names()))
@@ -853,7 +1046,7 @@ def is_request_approved(req) =
             >#
 
             # Reject if the track is a repetition that violates the stations rules
-            all_repetition_rules_satisfied = list.for_all(is_nonrepetition_req_satisfied, station_nonrepetition_reqs())
+            all_repetition_rules_satisfied = list.for_all(is_nonrepetition_req_satisfied, current_nonrepetition_reqs())
             if not all_repetition_rules_satisfied then
                 # log("REJECTED - Track violates at least one repetition rule!")
                 false
@@ -911,8 +1104,7 @@ end
 
 def timed_enqueue(command, exec_delay) = # command (list), exec_delay (float, seconds)
     now = time()
-    command_time = now + exec_delay # needs to be ref to be visible within func below?
-    log("Timed DJ command received:         " ^ string(command) ^ " with execution set to " ^ string(exec_delay) ^ " seconds from now")
+    command_time = now + exec_delay
     command_pair = [(command, command_time)] # timed queue uses absolute times for execution
     timed_command_queue := list.append(timed_command_queue(), command_pair)
     # now sort it by time (least first) so we can just check the head of the list in the command loop
@@ -921,14 +1113,12 @@ def timed_enqueue(command, exec_delay) = # command (list), exec_delay (float, se
 end
 
 def trackend_enqueue(command, exec_delay) =
-    log("Trackend DJ command received:      " ^ string(command) ^ " with execution delay: " ^ string(exec_delay) ^ " after end of this track")
     command_pair = [(command, exec_delay)] # trackend queue uses a delay, all of which can be turned into fixed timed_enqueue requests at track end
     trackend_command_queue := list.append(trackend_command_queue(), command_pair)
     # log("trackend command queue now: " ^ string(trackend_command_queue()))
 end
 
 def pre_trackend_enqueue(command, exec_delay) =
-    log("Pre-trackend DJ command received:  " ^ string(command) ^ " with execution time: " ^ string(exec_delay) ^ " before end of this track")
     command_pair = [(command, exec_delay)]
     pre_trackend_command_queue := list.append(pre_trackend_command_queue(), command_pair)
     # now sort it by pre-trackend delay (largest first) so we can just check the head of the list in the command loop
@@ -936,28 +1126,20 @@ def pre_trackend_enqueue(command, exec_delay) =
     # log("pre-trackend command queue now: " ^ string(pre_trackend_command_queue()))
 end
 
-# command-queueable functions
+# Command-queueable functions
 
-def set_fadeout_trackend(arg) =
+
+def set_pause_playback(arg) =
     if (arg == "true") then
-        fadeout_trackend := true
+        pause_playback := true
     elsif (arg == "false") then
-        fadeout_trackend := false
+        pause_playback := false
     else
-        log("Bad arg to set_fadeout_trackend")
+        log("Bad arg to set_pause_playback")
     end
 end
 
-def set_fadeout_instant(arg) =
-    if (arg == "true") then
-        fadeout_instant := true
-    elsif (arg == "false") then
-        fadeout_instant := false
-    else
-        log("Bad arg to set_fadeout_instant")
-    end
-end
-
+# a source that will be immediately smooth_add'ed into whatever is playing, whenever there is a request (like an announcement)
 playover_source = request.queue(id="playover_source") # removed audio_to_stereo at v2.0
 
 def set_voice(voicename) =
@@ -975,12 +1157,11 @@ def set_voice(voicename) =
     log("   New voice selected: " ^ newvoice())
 end
 
-
 def playover(file_path) =
     # Queue up the speech along with some bookending silence
-    playover_source.push(request.create("synth:shape=sine,frequency=0.0,duration=3"))
-    playover_source.push(request.create("file:" ^ file_path))
-    playover_source.push(request.create("synth:shape=sine,frequency=0.0,duration=1"))
+    playover_source.push(request.create(temporary=true, "synth:shape=sine,frequency=0.0,duration=3"))
+    playover_source.push(request.create(temporary=true, "file:" ^ file_path))
+    playover_source.push(request.create(temporary=true, "synth:shape=sine,frequency=0.0,duration=1"))
 end
 
 def say(thing_to_say) =
@@ -1027,156 +1208,246 @@ def say(thing_to_say) =
 end
 
 
+# a source that will play at the end of the current track, regardless of what the playlist is doing
+request_injection_source = request.queue(id="playover_source") # removed audio_to_stereo at v2.0
+
+
+def enqueue_silence (duration_seconds) =
+    request_injection_source.push(request.create(temporary=true, "synth:shape=sine,frequency=0.0,duration=" ^ string(duration_seconds)))
+end
+
+def enqueue_track (filename) = 
+    if (filename == "") then
+        log("Unable to enqueue track - no filename provided")
+    elsif (not file.exists(stationconfig_filename)) then
+        log("Unable to enqueue track - file does not exist: " ^ filename)
+    else
+        request_injection_source.push(request.create("file:" ^ filename))
+    end
+end
+
+
+def rewind () = 
+    current_track_metadata = current_show_source().last_metadata() ?? []
+    if (current_track_metadata != []) then
+        current_track_filename = current_track_metadata["filename"]
+        request_injection_source.push(request.create(temporary=true, "synth:shape=sine,frequency=0.0,duration=2"))
+        request_injection_source.push(request.create(current_track_filename))
+        thread.pause(0.1) # to provide a moment for the requests to actually get into the queue before the skip
+        source.skip(current_show_source())
+    else
+        log("Unable to rewind current track - no metadata present")
+    end
+end
+
+
 def skip () =
     source.skip(current_show_source()) 
     log("Skipping to next track in playlist!")
 end
 
 
-# show management functions (plus change_show queueable command)
+# Show management functions (plus change_show queueable command)
 
-def handle_track_end(this_metadata) =
-    ignore(this_metadata)
-    log("  - track change signal -")
-    track_endtime := true # triggers the command_loop
+
+
+
+def handle_track_end (this_metadata) =
+    update_specials_and_last_played_state() # to be safe, attempt a specials update based on the now-playing track in case this isn't a normal next-track-in-playlist-queue track that is_request_approved would pick up
+    track_endtime := true # tell the command_loop to do track end things
+    logtrack(this_metadata)
 end
 
 
-def change_show(show_name) =
-    if (list.assoc(default="error", show_name, show_paths()) != "error") then
-        log("  --- New show starting: " ^ show_name ^ " ------------------------------------")
-    
-        show_path = list.assoc(default="error", show_name, show_paths())
+# keep each show's sources stored so they only have to be created once
+show_sources = ref ([]) # the playlist sources themselves, to be assigned to current_show_source
+show_output_sources = ref ([]) # sources with all of the additional hooks to be assigned to current_output_source
 
-        # The check_next handler kicks off checking if the potentially-next track meets specified requirements
-        show_source = playlist(id="scheduled_show_playlist", check_next=is_request_approved, register_server_commands=false, show_path)
+
+
+def change_show(this_show_name) =
+    if (list.assoc(default="error", this_show_name, show_paths()) != "error") then
+        log("  --- New show starting: " ^ this_show_name ^ " ------------------------------------")
         
-        # TODO consider switching to on_track (rather than on_metadata), which might avoid bogus metadata... same arguments and everything, one-line change
-        show_source.on_metadata(synchronous=false, logtrack) # NOTE - this previously was part of line above... docs seemingly lying about this returning source, not unit
-        current_show_source := show_source
-    
         # TODO maybe use noise() or sine() instead of blank() to prevent players from disconnecting (supposedly)
-
         # First, disconnect the current source from the dynamic source before doing some prep for the new show
-        current_output_source := blank()
+        current_output_source := silence
 
-        # We can't let the new source start up with this "true" because it will be stuck that way (track end to reevaluate will never come)
-        set_fadeout_trackend("false")
+        # Get the playlist-based source used for control
+        if (list.assoc.mem(this_show_name, show_sources())) then
+            current_show_source := list.assoc(this_show_name, show_sources())
+            # skip so the show doesn't start partway through a track, won't be audible because we haven't made it active yet
+            source.skip(current_show_source())
+        else
+            show_path = list.assoc(default=".", this_show_name, show_paths())
 
-        # Now create the new source for broadcast
-        show_source_with_switches = 
-            switch(id="fadeout_instant_handler", track_sensitive=false, [ ({fadeout_instant() == true}, blank()), ({true},
-                switch(id="fadeout_trackend_handler", track_sensitive=true, [ ({fadeout_trackend() == true}, blank()), ({true},
-                    show_source
-                ) ] )
-            ) ] )
-        show_source_with_switches.on_track(synchronous=true, handle_track_end)
-        new_output_source = smooth_add(duration=1.5, p=0.1, special=playover_source, normal=show_source_with_switches)
+            # The check_next handler kicks off checking if the potentially-next track meets specified requirements
+            show_source = fallback(id="injectable_scheduled_show_playlist", track_sensitive=true,
+                    [request_injection_source,
+                    playlist(id="scheduled_show_playlist", check_next=is_request_approved, register_server_commands=false, show_path)]
+                )
+            show_source.on_track(synchronous=false, handle_track_end)
+
+            # save it for next time
+            show_sources := list.append([(this_show_name, show_source)], show_sources())
+
+            current_show_source := show_source  
+        end
 
         # Set the source used by the dynamic broadcast source
-        current_output_source := new_output_source
-    
+        if (list.assoc.mem(this_show_name, show_output_sources())) then
+            current_output_source := list.assoc(this_show_name, show_output_sources())
+        else
+            # Create the new source for broadcast
+            # NOTE: you can wrap this in a crossfade(), which works, but it seems to make on_track handling not possible
+            #    so if we want to do crossfading, we'll have to really change up some logic.
+            # ALSO NOTE: there used to be a track_sensitive pause here too, but this was a bad idea because switching to
+            #    blank meant that a track change would never happen again for that source, making it impossible to change
+            #    back to that show.
+            show_source_with_switches = 
+                switch(id="pause_handler", track_sensitive=false, [ ({pause_playback() == true}, silence), ({true},
+                    current_show_source()
+                ) ] )
+            output_source = smooth_add(duration=1.5, p=0.1, special=playover_source, normal=show_source_with_switches)
 
-        current_show_name := show_name
-        current_show_longname = list.assoc(default="", show_name, show_longnames())
+            # save it for next time
+            show_output_sources := list.append([(this_show_name, output_source)], show_output_sources())
+
+            current_output_source := output_source
+        end
+
+        current_show_name := this_show_name
+        current_show_longname = list.assoc(default="", this_show_name, show_longnames())
         set_voice("normal")
-        ignore(
-            file.write(
-                    data=current_show_longname,
-                    append=false,
-                    station_currentshow_path
-                )
-        )
+        if (station_currentshow_path != "") then
+            ignore(
+                file.write(
+                        data=current_show_longname,
+                        append=false,
+                        station_currentshow_path
+                    )
+            )
+        end
+        this_show_specials_reqs = list.assoc(default=[], current_show_name(), show_specials_reqs())
+        if this_show_specials_reqs != [] then
+            log("   Using this show's own specials requirements:\n" ^ "   " ^ string(this_show_specials_reqs))
+            current_specials_reqs := this_show_specials_reqs
+        else
+            log("   Using station-default specials requirements:\n" ^ "   " ^ string(station_specials_reqs()))
+            current_specials_reqs := station_specials_reqs()
+        end
+        this_show_nonrepetition_reqs = list.assoc(default=[], current_show_name(), show_nonrepetition_reqs())
+        if this_show_nonrepetition_reqs != [] then
+            log("   Using this show's own nonrepetition requirements:\n" ^ "   " ^ string(this_show_nonrepetition_reqs))
+            current_nonrepetition_reqs := this_show_nonrepetition_reqs
+        else
+            log("   Using station-default nonrepetition requirements:\n" ^ "   " ^ string(station_nonrepetition_reqs()))
+            current_nonrepetition_reqs := station_nonrepetition_reqs()
+        end
     else
-        log("No playlist path specified for requested show: " ^ show_name)
+        log("No playlist path specified for requested show: " ^ this_show_name)
     end
+
+    # make sure we start playing, regardless of if the show actually switched or not
+    set_pause_playback("false")
 
 end
 
-# queue execution functions
+# Command queue execution functions
 
+# commands are of format: ["command_name", "command_argument"]
 def execute_a_command(command) =
     command_name = list.hd(default="", command)
     command_arg = list.nth(default="", command, 1)
     log("PROCESSING DJ COMMAND: " ^ command_name ^ " - with argument: " ^ command_arg)
     if (command_name == "change_show") then
         change_show(command_arg)
-    elsif (command_name == "set_fadeout_trackend") then
-        set_fadeout_trackend(command_arg)
-    elsif (command_name == "set_fadeout_instant") then
-        set_fadeout_instant(command_arg)
+    elsif (command_name == "set_pause_playback") then
+        set_pause_playback(command_arg)
     elsif (command_name == "say") then
         say(command_arg)
     elsif (command_name == "set_voice") then
         set_voice(command_arg)
     elsif (command_name == "skip") then
         skip()
+    elsif (command_name == "rewind") then
+        rewind()
+    elsif (command_name == "enqueue_silence") then
+        enqueue_silence(int_of_string(command_arg))
+    elsif (command_name == "enqueue_track") then
+        enqueue_track(command_arg)
     else
         log("   \"#{command_name}\" is not a supported command!")
     end
     #TODO moar commands
 end
 
+# execute any timed commands that are due right now
 def process_timed_command_queue() =
     now = time()
-    def process_commands(this_command_pair) =
+    remaining_queue = ref([])
+    def iter_command(this_command_pair) =
         this_command = fst(this_command_pair)
         this_command_time = snd(this_command_pair)
         if (this_command_time <= now) then
+            # do it now!
             execute_a_command(this_command)
-            false # done, doesn't get saved in the updated list
         else
-            true
+            remaining_queue := list.append(remaining_queue(), [this_command_pair])
         end
     end
-    timed_command_queue := list.filter(process_commands, timed_command_queue()) # updated queue
+    list.iter(iter_command, timed_command_queue())
+    timed_command_queue := remaining_queue()
 end
 
+# execute any pre-trackend commands that are due right now
 def process_pre_trackend_command_queue() =
     track_remaining_time = source.remaining(current_show_source())
-    def process_commands(this_command_pair) =
+    remaining_queue = ref([])
+    def iter_command(this_command_pair) =
         this_command = fst(this_command_pair)
         this_command_time = snd(this_command_pair)
         if (track_remaining_time <= this_command_time) then
-            # do it now! (actually queue it for immediate execution if possible)
-            timed_enqueue(this_command, 0.0)
-            false # done, doesn't get saved in the updated list
+            # do it now!
+            execute_a_command(this_command)
         else
-            true
+            remaining_queue := list.append(remaining_queue(), [this_command_pair])
         end
     end
-    pre_trackend_command_queue := list.filter(process_commands, pre_trackend_command_queue()) # updated queue
+    list.iter(iter_command, pre_trackend_command_queue())
+    pre_trackend_command_queue := remaining_queue()
 end
 
+# clear out the pre-trackend and trackend queues
 def process_trackend_command_queue() =
-    def process_trackend_commands (this_command_pair) =
+    def execute_pretrackend_command(this_command_pair) =
+        this_command = fst(this_command_pair)
+        # do it now!
+        execute_a_command(this_command)
+    end
+    def handle_trackend_command (this_command_pair) =
         this_command = fst(this_command_pair)
         this_command_delay = snd(this_command_pair)
         if (this_command_delay <= 0.0) then
-            # queue it now!
-            timed_enqueue(this_command, 0.0)
+            # do it now!
+            execute_a_command(this_command)
         else
             # inject commands with non-zero delay into timed queue
             timed_enqueue(this_command, this_command_delay + 0.0)
         end
-        false # just return an empty queue to the filter
-    end
-    def process_pretrackend_commands(this_command_pair) =
-        this_command = fst(this_command_pair)
-        this_command_time = snd(this_command_pair)
-        # queue it now!
-        timed_enqueue(this_command, 0.0)
-        false # just return an empty queue to the filter
     end
 
-    remaining_pre_trackend_commands = list.length(pre_trackend_command_queue())
-    if (remaining_pre_trackend_commands > 0) then
-        log(string(remaining_pre_trackend_commands) ^ " pre-trackend DJ commands present in queue at track's end. Running these first.")
-        pre_trackend_command_queue := list.filter(process_pretrackend_commands, pre_trackend_command_queue()) # will just be cleared out
+    # first, do all of the outstanding pre-trackend commands that need to just happen now
+    num_pre_trackend_commands = list.length(pre_trackend_command_queue())
+    if (num_pre_trackend_commands > 0) then
+        log(string(num_pre_trackend_commands) ^ " pre-trackend DJ commands present in queue at track's end. Running these first.")
+        list.iter(execute_pretrackend_command, pre_trackend_command_queue())
+        pre_trackend_command_queue := []
     end
-
+    # then, for all trackend commands, either execute immediately or convert to timed commands
     if (list.length(trackend_command_queue()) > 0) then
-        trackend_command_queue := list.filter(process_trackend_commands, trackend_command_queue()) # will just be cleared out
+        list.iter(handle_trackend_command, trackend_command_queue())
+        trackend_command_queue := []
     end
 end
 
@@ -1184,144 +1455,297 @@ end
 
 def command_loop() =
     now = time()
-    # check pre_trackend_command_queue
-    track_remaining_time = source.remaining(current_show_source())
-    next_pre_trackend_time = snd(list.hd(default=(["", ""], -1.0), pre_trackend_command_queue()))
-    if (track_remaining_time <= next_pre_trackend_time) then
-        process_pre_trackend_command_queue()
-    end
+
     # check trackend_command_queue
     if (track_endtime()) then
         track_endtime := false # reset to start waiting for next trackend
         process_trackend_command_queue()
+    else # only check the pre-trackend queue if it's not a track endtime (since that will clear that queue anyway)
+        # check pre_trackend_command_queue
+        track_remaining_time = source.remaining(current_show_source())
+        next_pre_trackend_time = snd(list.hd(default=(["", ""], -1.0), pre_trackend_command_queue()))
+        if (track_remaining_time <= next_pre_trackend_time) then
+            process_pre_trackend_command_queue()
+        end
     end
-    # check timed_command_queue
+
+    # check timed_command_queue (which will now also contain any trackend commands to do at this moment)
     next_timed_command_time = snd(list.hd(default=(["", ""], 0.0), timed_command_queue()))
     if (now >= next_timed_command_time and next_timed_command_time != 0.0) then
         process_timed_command_queue()
     end
-    0.1
+    0.2
 end
 
-thread.run.recurrent(delay=0.1, command_loop)
+# kick off recurring command_loop processing
+thread.run.recurrent(delay=0.2, command_loop)
 
 
+# Single external receiver of new command requests to add to the queue
+def request_command(command, exec_delay, timing_type) = 
+    # before adding any new commands, run the command_loop manually to make sure existing commands are handled properly
+    # particularly trackend handling - previously there was a race condition issue when command_loop lagged new commands added to queue
+    ignore(command_loop())
+    if (timing_type == "timed") then
+        log("Timed command received:         " ^ string(command) ^ " with execution set to " ^ string(exec_delay) ^ " seconds from now")
+        timed_enqueue(command, exec_delay)
+    elsif (timing_type == "trackend") then
+        log("Trackend command received:      " ^ string(command) ^ " with execution delay: " ^ string(exec_delay) ^ " after end of this track")
+        trackend_enqueue(command, exec_delay)
+    elsif (timing_type == "pre-trackend") then
+        log("Pre-trackend command received:  " ^ string(command) ^ " with execution time: " ^ string(exec_delay) ^ " before end of this track")
+        pre_trackend_enqueue(command, exec_delay)
+    else
+        log("Command ignored: Timing type " ^ string(timing_type) ^ " for " ^ string(command) ^ " command not recognized")
+    end
+end
+
+def clear_command_queue(timing_type) = 
+    if (timing_type == "timed") then
+        log("Clearing timed command queue")
+        timed_command_queue := []
+    elsif (timing_type == "trackend") then
+        log("Clearing trackend command queue")
+        trackend_command_queue := []
+    elsif (timing_type == "pre-trackend") then
+        log("Clearing pre-trackend command queue")
+        pre_trackend_command_queue := []
+    elsif (timing_type == "all") then
+        timed_command_queue := []
+        trackend_command_queue := []
+        pre_trackend_command_queue := []
+    else
+        log("Queue clear request ignored: Timing type " ^ string(timing_type) ^ "not recognized")
+    end
+end
 
 
 
 # SERVER FUNCTIONS
 
-# commands for auto DJ
+# Commands for auto DJ queue
 
-def dj_trackend_enqueue(input_string) =
-    trimmed_input = string.trim(input_string)
+# common handler for different variations of DJ command requests
+def request_command_from_string(input_string, request_type) = 
     command_name = ref ("")
     command_arg = ref ("")
     command_time = ref (0.0)
+
+    trimmed_input = string.trim(input_string)
     input_list = string.split(separator=" ", trimmed_input)
     input_list_length = list.length(input_list)
     input_length = string.length(trimmed_input)
-    if (input_list_length > 0) then
+
+    if (input_list_length < 1) then
+        "No DJ command provided"
+    else
         command_name := list.nth(default="", input_list, 0)
-        last_input = list.nth(default="", input_list, input_list_length-1)
-        last_input_as_float = float_of_string(default=0.8686, last_input) # hack to just check if there's a float there or not while allowing positive or negative input
         command_name_length = string.length(command_name())
-        if (last_input_as_float != 0.8686) then # float found, so user provided a delay to be used rather than default
+        if (request_type == "now") then
+            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
+            request_command([command_name(), command_arg()], 0.0, "timed")
+            "Done"
+        elsif (request_type == "trackend") then
+            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
+            request_command([command_name(), command_arg()], 0.0, "trackend")
+            "Done"           
+        else
+            last_input = list.nth(default="", input_list, input_list_length-1)
+            last_input_as_float = float_of_string(default=0.0, last_input)
             command_time := last_input_as_float
             command_time_length = string.length(last_input)
-            # command_arg is everything between command (at start) and time (at end)
-            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
-        else
-            # command_arg is everything after command (at start)
-            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
+            if (request_type == "delayed") then
+                if (command_time() < 0.0) then
+                    "Cannot delay a command into the past"
+                else
+                    command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
+                    request_command([command_name(), command_arg()], command_time(), "timed")
+                    "Done"
+                end
+            elsif (request_type == "trackend_delayed") then
+                if (command_time() < 0.0) then
+                    command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
+                    request_command([command_name(), command_arg()], -(command_time()), "pre-trackend")
+                    "Done"                    
+                else
+                    command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
+                    request_command([command_name(), command_arg()], command_time(), "trackend")
+                    "Done"
+                end             
+            else
+                "Invalid request type provided"
+            end
         end
-        if (command_time() >= 0.0) then
-            trackend_enqueue([command_name(), command_arg()], command_time())
-        else
-            pre_trackend_enqueue([command_name(), command_arg()], 0.0-command_time())
-        end
-        "Done"
-    else
-        "No DJ command provided"
     end
 end
 
-def dj_timed_enqueue(input_string) =
-    trimmed_input = string.trim(input_string)
-    command_name = ref ("")
-    command_arg = ref ("")
-    command_time = ref (0.0)
-    input_list = string.split(separator=" ", trimmed_input)
-    input_list_length = list.length(input_list)
-    input_length = string.length(trimmed_input)
-    if (input_list_length > 0) then
-        command_name := list.nth(default="", input_list, 0)
-        last_input = list.nth(default="", input_list, input_list_length-1)
-        last_input_as_float = float_of_string(default=-1.0, last_input)
-        command_name_length = string.length(command_name())
-        if (last_input_as_float >= 0.0) then
-            command_time := last_input_as_float
-            command_time_length = string.length(last_input)
-            # command_arg is everything between command (at start) and time (at end)
-            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - command_time_length - 2)
-        else
-            # command_arg is everything after command (at start)
-            command_arg := string.sub(trimmed_input, start=command_name_length + 1, length=input_length - command_name_length - 1)
-        end
-        timed_enqueue([command_name(), command_arg()], command_time())
+
+def dj_now_handler(input_string) = 
+    request_command_from_string(input_string, "now")
+end
+
+def dj_trackend_handler(input_string) =
+    request_command_from_string(input_string, "trackend")
+end
+
+def dj_delayed_handler(input_string) =
+    request_command_from_string(input_string, "delayed")
+end
+
+def dj_trackend_delayed_handler(input_string) =
+    request_command_from_string(input_string, "trackend_delayed")
+end
+
+def dj_get_queue(input_string) = 
+    timed_queue = string(timed_command_queue())
+    pre_trackend_queue = string(pre_trackend_command_queue())
+    trackend_queue = string(trackend_command_queue())
+
+    if input_string == "" or input_string == "all" then
+        "timed queue - commands to execute at a specific time:\n" ^
+        timed_queue ^ "\n" ^
+        "pre-trackend queue - commands to execute at a delay before the end of the track:\n" ^
+        pre_trackend_queue ^ "\n" ^
+        "trackend queue - commands to execute at a delay after the end of the track:\n" ^
+        trackend_queue
+    elsif input_string == "timed" then
+        timed_queue
+    elsif input_string == "pre-trackend" then
+        pre_trackend_queue
+    elsif input_string == "trackend" then
+        trackend_queue
+    else
+        "Invalid argument provided"
+    end    
+end
+
+def dj_clear_queue(input_string) = 
+    if (input_string == "timed" or input_string == "trackend" or input_string == "pre-trackend" or input_string == "all") then
+        clear_command_queue(input_string)
         "Done"
     else
-        "No DJ command provided"
+        "No or invalid queue identifier provided"
     end
 end
+
+
+dj_command_list =   "  Supported commands:\n" ^
+                    "      change_show [show name]\n" ^
+                    "      set_pause_playback [true/false]\n" ^
+                    "      say [statement]\n" ^
+                    "      set_voice [voice name]\n" ^
+                    "      skip\n" ^
+                    "      rewind\n" ^
+                    "      enqueue_silence [silence time in seconds]\n" ^
+                    "      enqueue_track [server file path to track]\n"
 
 server.register(namespace="dj",
-    usage="trackend <command> [<argument>] [<time>]",
-    description="Inserts a command into the DJ queue to be run at an optional delay time (s) from track's end\n" ^
-                "  Supported commands:\n" ^
-                "      change_show [show name]\n" ^
-                "      set_fadeout_trackend [true/false]\n" ^
-                "      set_fadeout_instant [true/false]\n" ^
-                "      say [statement]\n" ^
-                "      set_voice [voice name]\n" ^
-                "      skip\n",
+    usage="now <command> [<argument>]",
+    description="Inserts a command into the DJ queue to be run right away\n" ^ dj_command_list,
+    "now",
+    dj_now_handler)
+
+server.register(namespace="dj",
+    usage="trackend <command> [<argument>]",
+    description="Inserts a command into the DJ queue to be run at current track's end\n" ^ dj_command_list,
     "trackend",
-    dj_trackend_enqueue)
+    dj_trackend_handler)
 
 server.register(namespace="dj",
     usage="now <command> [<argument>] [<time>]",
-    description="Inserts a command into the DJ queue to be run after an optional delay time (s) from now\n" ^
-                "  Supported commands:\n" ^
-                "      change_show [show name]\n" ^
-                "      set_fadeout_trackend [true/false]\n" ^
-                "      set_fadeout_instant [true/false]\n" ^
-                "      say [statement]\n" ^
-                "      set_voice [voice name]\n" ^
-                "      skip\n",
-    "now",
-    dj_timed_enqueue)
+    description="Inserts a command into the DJ queue to be run after an optional delay time (s) from now\n" ^ dj_command_list,
+    "delayed",
+    dj_delayed_handler)
 
-# commands for station control board
+server.register(namespace="dj",
+    usage="trackend_delayed <command> [<argument>] [<time>]",
+    description="Inserts a command into the DJ queue to be run at an optional delay time (s) from track's end\n" ^ dj_command_list,
+    "trackend_delayed",
+    dj_trackend_delayed_handler)
+
+server.register(namespace="dj",
+    usage="get_queue [<timed|pre-trackend|trackend|all>]",
+    description="Returns the contents of a current command queue, or all of them by default\n",
+    "get_queue",
+    dj_get_queue)
+
+server.register(namespace="dj",
+    usage="clear_queue <timed|pre-trackend|trackend|all>",
+    description="Clears the specified command queue (or all of them)\n",
+    "clear_queue",
+    dj_clear_queue)
+
+
+# Commands for station control board
 
 def station_get_specials(input_string) = 
     trimmed_input = string.trim(input_string)
     if trimmed_input == "this_hour" then
         json.stringify(specials_plays_this_hour())
+    elsif trimmed_input == "this_show" then
+        json.stringify(specials_plays_this_show()) 
+    elsif trimmed_input == "last_show" then
+        json.stringify(specials_plays_last_show()) 
     elsif trimmed_input == "today" then
         json.stringify(specials_plays_today())
+    elsif trimmed_input == "yesterday" then
+        json.stringify(specials_plays_yesterday())
     elsif trimmed_input == "continuous" then
         json.stringify(specials_plays_continuous())
+    elsif trimmed_input == "continuous_by_show" then
+        json.stringify(specials_plays_continuous_by_show())
     else
-        "ERROR invalid timeframe specified, choose one of: this_hour, today, or continuous"
+        "Invalid timeframe specified"
     end
 end
 
 server.register(namespace="station",
-    usage="specials <this_hour|today|continuous>",
+    usage="get_specials <this_hour|this_show|last_show|today|yesterday|continuous|continuous_by_show>",
     description="Returns a JSON array of the counts of specials that have played during the specified timeframe",
-    "specials",
+    "get_specials",
     station_get_specials)
 
+
+# HTTP ENDPOINTS
+
+def cover_handler(req) =
+    ignore(req)
+    cover_path = request.uri(cover_manager())
+    mime       = list.assoc(default="image/jpeg", "cover_mime", now_playing_metadata())
+    http.response(
+        status_code    = 200,
+        headers = [("Content-Type", mime),
+                    ("Access-Control-Allow-Origin", "*")],
+        data    = file.read(cover_path)
+    )
+end
+
+def nowplaying_handler(req)
+    ignore(req)
+    http.response(
+        status_code    = 200,
+        headers = [("Content-Type", "application/json"),
+                    ("Access-Control-Allow-Origin", "*")],
+        data    = json.stringify(now_playing_filtered_md_struct())
+    )
+end
+
+def recent_handler(req)
+    ignore(req)
+    http.response(
+        status_code    = 200,
+        headers = [("Content-Type", "application/json"),
+                    ("Access-Control-Allow-Origin", "*")],
+        data    = json.stringify(recent_tracks_md_structs())
+    )
+end
+
+if (station_http_endpoints==true) then
+    # TODO add other endpoints here
+    harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/cover", cover_handler)
+    harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/nowplaying", nowplaying_handler)
+    harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/recent", recent_handler)
+end
 
 
                 
@@ -1330,12 +1754,7 @@ server.register(namespace="station",
 
 # SET UP AUTOMATED DYNAMIC SOURCE CONTROL VIA SCHEDULE – AKA AUTO-DJ
 
-current_scheduled_show_name = ref ("")
-current_scheduled_show_hour = ref (0)
-current_scheduled_show_time = ref (0.0)
-next_scheduled_show_name = ref ("")
-next_scheduled_show_hour = ref (0)
-next_scheduled_show_time = ref (0.0)
+
 
 def update_current_next_shows () =
 
@@ -1459,37 +1878,35 @@ def auto_dj_loop() =
     if (current_show_name() == "") then
         update_current_next_shows() # figure out what's supposed to be going on
         log(" *** AUTO-DJ: Starting up with... " ^ current_scheduled_show_name())
-        timed_enqueue(["change_show", current_scheduled_show_name()], 0.0)
+        request_command(["change_show", current_scheduled_show_name()], 0.0, "timed")
         last_handled_hour_time := today_start_time + (float_of_int(this_hour) * 3600.0)
     end
+    
     up_next_hour_time = last_handled_hour_time() + 3600.0
 
-    if (now >= next_scheduled_show_time()) then # always keep the latest schedule info correct, regardless of other logic
-        update_current_next_shows()
-    end
-
-    # do show signoffs, signons, and station IDs when it's time
-    if (now > up_next_hour_time - 60.0 and track_end_time >= up_next_hour_time) then
-        log(" *** AUTO-DJ: Time to handle the hour.")
+    # set up show signoffs, signons, and station IDs when it's time - at least a minute before the hour, but only if the current track will end after the hour
+    if (now > up_next_hour_time - 60.0 and track_end_time >= up_next_hour_time) then # only one run per hour - get done whatever needs doing
+        log(" *** AUTO-DJ: Time to prepare for the upcoming hour.")
+        # check if the playing track will end no later than 10 minutes after the hour
         if (track_end_time < up_next_hour_time + (10.0 * 60.0)) then # do stuff at the trackend
             # TODO - maybe ideally don't mostly repeat this code in two places (below), but for now make sure to make changes in both places
             # NOTE ideally this should be an == without the 100.0s slop, but I don't trust my float times
             if (next_scheduled_show_time() < up_next_hour_time + 100.0 and next_scheduled_show_name() != current_scheduled_show_name()) then
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
-                timed_enqueue(["set_fadeout_trackend", "true"], 0.0)
-                trackend_enqueue(["change_show", next_scheduled_show_name()], 3.0)
                 current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
                 if (current_signoff_announcement != "") then
-                    pre_trackend_enqueue(["say", current_signoff_announcement], 40.0)
+                    request_command(["say", current_signoff_announcement], 40.0, "pre-trackend")
                 end
+                request_command(["enqueue_silence", "2"], 0.0, "timed")
+                request_command(["change_show", next_scheduled_show_name()], 1.0, "trackend")
                 next_signon_announcement = list.assoc(default=station_id_announcement, next_scheduled_show_name(), show_signon_announcements())
                 if (next_signon_announcement != "") then
-                    trackend_enqueue(["say", next_signon_announcement], 13.0)
+                    request_command(["say", next_signon_announcement], 13.0, "trackend")
                 end
             else # no scheduled show switch this hour, so see about doing a station ID
                 if (station_id_announcement != "") then
                     log(" *** AUTO-DJ: Time for a station ID announcement.")
-                    pre_trackend_enqueue(["say", station_id_announcement], 12.0)
+                    request_command(["say", station_id_announcement], 12.0, "pre-trackend")
                 end
             end
         else # it's time to go but the current track ends 10 minutes after the hour, so just do it without waiting for track end.
@@ -1497,25 +1914,28 @@ def auto_dj_loop() =
             if (next_scheduled_show_time() < up_next_hour_time + 100.0 and next_scheduled_show_name() != current_scheduled_show_name()) then
                 log (" *** AUTO-DJ: Coming up next... " ^ next_scheduled_show_name())
                 log (" *** AUTO-DJ: Current track ends more than 10 minutes after the hour. ")
-                timed_enqueue(["set_fadeout_instant", "true"], 40.0)
-                timed_enqueue(["change_show", next_scheduled_show_name()], 43.0)
-                timed_enqueue(["set_fadeout_instant", "false"], 43.1)
                 current_signoff_announcement = list.assoc(default="", current_scheduled_show_name(), show_signoff_announcements())
                 if (current_signoff_announcement != "") then
-                    timed_enqueue(["say", current_signoff_announcement], 0.0)
+                    request_command(["say", current_signoff_announcement], 0.0, "timed")
                 end
+                # TODO: what I really want here is a fade-out of the playing track before the new show starts, if that's possible. Do a playover of silence...?
+                request_command(["change_show", next_scheduled_show_name()], 42.0, "timed")
                 next_signon_announcement = list.assoc(default=station_id_announcement, next_scheduled_show_name(), show_signon_announcements())
                 if (next_signon_announcement != "") then
-                    timed_enqueue(["say", next_signon_announcement], 63.0)
+                    request_command(["say", next_signon_announcement], 62.0, "timed")
                 end
             else # no scheduled show switch this hour, so see about doing a station ID right around the hour
                 if (station_id_announcement != "") then
                     log(" *** AUTO-DJ: Time for a station ID announcement.")
-                    timed_enqueue(["say", station_id_announcement], 60.0)
+                    request_command(["say", station_id_announcement], 60.0, "timed")
                 end
             end
         end
         last_handled_hour_time := up_next_hour_time # one way or the other, this hour is handled and this section won't run again
+    end
+
+    if (now >= next_scheduled_show_time()) then # always keep the latest schedule info correct for the next loop, regardless of other logic
+        update_current_next_shows()
     end
 
     next_pulse()
@@ -1528,6 +1948,5 @@ end
 log("STARTUP: initiating AUTO-DJ...")
 
 thread.run.recurrent(delay=5.0, auto_dj_loop) # start it up!! # TODO make starting it up optional
-
 
 

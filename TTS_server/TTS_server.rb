@@ -57,11 +57,13 @@ server.mount_proc endpoint do |req, res|
         say_text = json["text"]
 
         timestamp = Time.now.strftime("%d-%m-%Y_%H%M%S")
+        request = "#{tts_type}#{voice}#{say_text}"
+        identifier = request.hash
 
         # other TTS handlers can go in here
         if tts_type == "macos"
           # TODO make the output location configred via ENV or something, where the client knows where to look
-          output_filename = "tts_macos_#{timestamp}.wav"
+          output_filename = "tts_macos_#{timestamp}_#{identifier}.wav"
           output_file = "#{output_path}#{output_filename}"
 
           system_result = macos_say(say_text, voice, output_file)

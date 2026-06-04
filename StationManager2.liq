@@ -227,7 +227,7 @@ log("STARTUP: loading showconfig...")
 
 # TODO: For now just pulling a list of names for the sake of the currentShow.log, need to parse the rest
 
-# TODO should do show_names here too, just as a convenient list of keys for the other lists
+show_names = ref ([]) # "Beats", "Groovestyle", ...
 show_paths = ref ([]) # ("Beats", "files/Instrumental Hip-Hop"), ("Groovestyle", "files/Stylish Background"), ...
 show_longnames = ref ([]) # ("Beats", "Straight Beats"), ("Groovestyle", "Groovestyle"), ...
 show_descriptions = ref([]) # ("Beats", "instrumental hip-hop"), ("Groovestyle", "your personal soundtrack")
@@ -240,8 +240,8 @@ show_nonrepetition_reqs = ref([]) # ("Beats", [<same format as station_nonrepeti
 
 showconfig_file = file.contents(station_showconfig_path)
 
-let json.parse (show_list : [(
-    string * {
+let json.parse (show_list : [{
+        show_name: string,
         playlist_path: string,
         show_longname: string?,
         show_description: string?,
@@ -251,27 +251,26 @@ let json.parse (show_list : [(
         shuffle_mode: string?,
         specials_reqs_path: string?,
         nonrepetition_reqs_path: string?
-    }
-)] as json.object ) = showconfig_file
+    }]
+) = showconfig_file
 
 def get_show(thisshow) =
-    thisshowkey = fst(thisshow) # TODO <-- AKA this_show_name, see note above
-    thisshowdata = snd(thisshow)
+    thisshowname = thisshow.show_name # used as key for other items, this is required - will fail if missing
 
     # TODO: all these "list.append" usages can probably be list.add... we're just adding one element
-    thisshowpath = thisshowdata.playlist_path # this is required - will fail if missing
-    show_paths := list.append([(thisshowkey, "#{station_playlists_root()}#{thisshowpath}")], show_paths())
-    thisshowlongname = thisshowdata.show_longname ?? "error" # TODO: deal with failure better
-    show_longnames := list.append([(thisshowkey, thisshowlongname)], show_longnames())
-    thisshowDJvoice = thisshowdata.DJ_voice ?? ""
-    show_voices := list.append([(thisshowkey, thisshowDJvoice)], show_voices())
-    thissignonannouncement = thisshowdata.signon_announcement ?? ""
-    show_signon_announcements := list.append([(thisshowkey, thissignonannouncement)], show_signon_announcements())
-    thissignoffannouncement = thisshowdata.signoff_announcement ?? ""
-    show_signoff_announcements := list.append([(thisshowkey, thissignoffannouncement)], show_signoff_announcements())
-    thisshuffle_mode = thisshowdata.shuffle_mode ?? "songs" # TODO: make actually do something
-    show_shuffle_modes := list.append([(thisshowkey, thisshuffle_mode)], show_shuffle_modes())
-    thisspecials_reqs_path = thisshowdata.specials_reqs_path ?? ""
+    thisshowpath = thisshow.playlist_path # this is required - will fail if missing
+    show_paths := list.append([(thisshowname, "#{station_playlists_root()}#{thisshowpath}")], show_paths())
+    thisshowlongname = thisshow.show_longname ?? "error" # TODO: deal with failure better
+    show_longnames := list.append([(thisshowname, thisshowlongname)], show_longnames())
+    thisshowDJvoice = thisshow.DJ_voice ?? ""
+    show_voices := list.append([(thisshowname, thisshowDJvoice)], show_voices())
+    thissignonannouncement = thisshow.signon_announcement ?? ""
+    show_signon_announcements := list.append([(thisshowname, thissignonannouncement)], show_signon_announcements())
+    thissignoffannouncement = thisshow.signoff_announcement ?? ""
+    show_signoff_announcements := list.append([(thisshowname, thissignoffannouncement)], show_signoff_announcements())
+    thisshuffle_mode = thisshow.shuffle_mode ?? "songs" # TODO: make actually do something
+    show_shuffle_modes := list.append([(thisshowname, thisshuffle_mode)], show_shuffle_modes())
+    thisspecials_reqs_path = thisshow.specials_reqs_path ?? ""
     if file.exists(thisspecials_reqs_path) then # this show has its own specials_reqs file to override the station's default
         thisspecials_reqs_file = file.contents(thisspecials_reqs_path)
         let json.parse ( thisspecials_reqs :
@@ -284,9 +283,9 @@ def get_show(thisshow) =
                     try_show_start: bool?
                 }
             ] ) = thisspecials_reqs_file
-        show_specials_reqs := list.append([(thisshowkey, thisspecials_reqs)], show_specials_reqs())
+        show_specials_reqs := list.append([(thisshowname, thisspecials_reqs)], show_specials_reqs())
     end
-    thisnonrepetition_reqs_path = thisshowdata.nonrepetition_reqs_path ?? ""
+    thisnonrepetition_reqs_path = thisshow.nonrepetition_reqs_path ?? ""
     if file.exists(thisnonrepetition_reqs_path) then # this show has its own nonrepetition_reqs file to override the station's default
         thisnonrepetition_reqs_file = file.contents(thisnonrepetition_reqs_path)
         let json.parse ( thisnonrepetition_reqs :
@@ -296,7 +295,7 @@ def get_show(thisshow) =
                     dont_repeat_within_last: string
                 }
             ] ) = thisnonrepetition_reqs_file
-        show_nonrepetition_reqs := list.append([(thisshowkey, thisnonrepetition_reqs)], show_nonrepetition_reqs())
+        show_nonrepetition_reqs := list.append([(thisshowname, thisnonrepetition_reqs)], show_nonrepetition_reqs())
     end
 end
 
@@ -1740,11 +1739,33 @@ def recent_handler(req)
     )
 end
 
+def showconfig_handler(req)
+    ignore(req)
+    http.response(
+        status_code    = 200,
+        headers = [("Content-Type", "application/json"),
+                    ("Access-Control-Allow-Origin", "*")],
+        data    = json.stringify(show_list)
+    )
+end
+
+def showschedule_handler(req)
+    ignore(req)
+    http.response(
+        status_code    = 200,
+        headers = [("Content-Type", "application/json"),
+                    ("Access-Control-Allow-Origin", "*")],
+        data    = json.stringify(showschedule_list)
+    )
+end
+
 if (station_http_endpoints==true) then
     # TODO add other endpoints here
     harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/cover", cover_handler)
     harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/nowplaying", nowplaying_handler)
     harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/recent", recent_handler)
+    harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/showconfig", showconfig_handler)
+    harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/showschedule", showschedule_handler)
 end
 
 

@@ -1759,6 +1759,21 @@ def showschedule_handler(req)
     )
 end
 
+def showstatus_handler(req)
+    ignore(req)
+    status_items = {
+        show_name = current_show_name(),
+        scheduled_show_name = current_scheduled_show_name(),
+        next_scheduled_show_name = next_scheduled_show_name()
+    }
+    http.response(
+        status_code    = 200,
+        headers = [("Content-Type", "application/json"),
+                    ("Access-Control-Allow-Origin", "*")],
+        data    = json.stringify(status_items)
+    )
+end
+
 if (station_http_endpoints==true) then
     # TODO add other endpoints here
     harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/cover", cover_handler)
@@ -1766,6 +1781,7 @@ if (station_http_endpoints==true) then
     harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/recent", recent_handler)
     harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/showconfig", showconfig_handler)
     harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/showschedule", showschedule_handler)
+    harbor.http.register.simple(port=station_http_endpoints_port, method="GET", "/showstatus", showstatus_handler)
 end
 
 

@@ -74,9 +74,6 @@ station_default_voice = stationconfig.default_voice ?? ""
 station_tts_server_endpoint = stationconfig.tts_server_endpoint ?? "http://host.docker.internal:3000/say"
 
 station_log_path = stationconfig.log_path ?? ""
-station_tracklog_path = stationconfig.tracklog_path ?? ""
-station_tracklog_length = stationconfig.tracklog_length ?? 20
-station_currentshow_path = stationconfig.currentshow_path ?? ""
 
 station_telnet_server = stationconfig.telnet_server ?? false
 station_telnet_server_port = stationconfig.telnet_server_port ?? 1234
@@ -86,6 +83,7 @@ station_telnet_server_netmask = stationconfig.telnet_server_netmask ?? "0.0.0.0"
 station_http_endpoints = stationconfig.http_endpoints ?? false
 station_http_endpoints_port = stationconfig.http_endpoints_port ?? 1080
 station_cover_default_path = stationconfig.cover_default_path ?? ""
+station_recent_tracks_count = stationconfig.recent_tracks_count ?? 12
 
 station_announcements_path = stationconfig.announcements_path ?? "announcements/"
 station_tts_announcements_path = stationconfig.tts_announcements_path ?? "/tmp/"
@@ -422,10 +420,8 @@ output.icecast(
 # metadata cache, so we can delay resolving requests, and to avoid continually looking up metadata from files themselves unnecessarily
 track_metadata_cache = ref([]) # [("/music/playlist/01-trackname.mp3", [("artist", "Big Name"), ... ]), ...]
 
-# list of readable recent tracks to dump to log or push out on http endpoint
-recent_tracks = ref ([])
+# list of readable recent tracks to push out on http endpoint
 recent_tracks_md_structs = ref ([])
-new_tracklog = ref ("")
 now_playing_metadata = ref([])
 now_playing_filtered_md_struct = ref({})
 
@@ -487,11 +483,6 @@ def get_metadata_value(this_tag, this_metadata)
     end
 end
 
-# Write stuff whenever there's new metadata
-def addtotracklog(nexttrack) =
-  new_tracklog := string.concat([new_tracklog(), nexttrack, "\n"])
-end
-
 cover_manager = file.cover.manager(
   id          = "current",
   default     = station_cover_default_path,
@@ -510,48 +501,30 @@ cover_manager = file.cover.manager(
 )
 
 def logtrack(this_metadata) =
-    if (station_tracklog_path != "") then
-        artist = get_metadata_value("artist", this_metadata)
-        album = get_metadata_value("album", this_metadata)
-        title = get_metadata_value("title", this_metadata)
-        year = get_metadata_value("year", this_metadata)
-        filename = get_metadata_value("filename", this_metadata)
-        if (title == "") then
-            log ("PLAYING: file without metadata")
-        else # we have a real thing playing, rather than a blank voiceover or something - log it as appropriate
-            newline="#{artist} - #{album} - #{title}"
-            log("PLAYING: " ^ newline ^ " (" ^ filename ^ ")") 
-            # update tracking
-            now_playing_metadata := this_metadata
-            now_playing_filtered_md_struct := {
-                title  = title,
-                artist = artist,
-                album  = album,
-                year = year
-            }
-            recent_tracks_md_structs := list.add(now_playing_filtered_md_struct(), recent_tracks_md_structs())
-            if (list.length(recent_tracks_md_structs()) > station_tracklog_length) then
-                recent_tracks_md_structs := list.slice(offset=0, length=station_tracklog_length, recent_tracks_md_structs())
-            end
-            # update cover manager
-            cover_manager.set(this_metadata)
-            # update log
-            if (station_tracklog_path != "") then
-                recent_tracks := list.add(newline, recent_tracks())
-                if (list.length(recent_tracks()) > station_tracklog_length) then
-                    recent_tracks := list.rev(list.tl(list.rev(recent_tracks())))
-                end
-                new_tracklog := ""
-                list.iter(addtotracklog, recent_tracks())
-                ignore(
-                    file.write(
-                        data=new_tracklog(),
-                        append=false,
-                        station_tracklog_path
-                    )
-                )
-            end
+    artist = get_metadata_value("artist", this_metadata)
+    album = get_metadata_value("album", this_metadata)
+    title = get_metadata_value("title", this_metadata)
+    year = get_metadata_value("year", this_metadata)
+    filename = get_metadata_value("filename", this_metadata)
+    if (title == "") then
+        log ("PLAYING: file without metadata")
+    else # we have a real thing playing, rather than a blank voiceover or something - log it as appropriate
+        this_track_info="#{artist} - #{album} - #{title}"
+        log("PLAYING: " ^ this_track_info ^ " (" ^ filename ^ ")") 
+        # update recent tracks for http endpoint
+        now_playing_metadata := this_metadata
+        now_playing_filtered_md_struct := {
+            title  = title,
+            artist = artist,
+            album  = album,
+            year = year
+        }
+        recent_tracks_md_structs := list.add(now_playing_filtered_md_struct(), recent_tracks_md_structs())
+        if (list.length(recent_tracks_md_structs()) > station_recent_tracks_count) then
+            recent_tracks_md_structs := list.slice(offset=0, length=station_recent_tracks_count, recent_tracks_md_structs())
         end
+        # update cover manager
+        cover_manager.set(this_metadata)
     end
 end
 
@@ -1323,15 +1296,6 @@ def change_show(this_show_name) =
         current_show_name := this_show_name
         current_show_longname = list.assoc(default="", this_show_name, show_longnames())
         set_voice("normal")
-        if (station_currentshow_path != "") then
-            ignore(
-                file.write(
-                        data=current_show_longname,
-                        append=false,
-                        station_currentshow_path
-                    )
-            )
-        end
         this_show_specials_reqs = list.assoc(default=[], current_show_name(), show_specials_reqs())
         if this_show_specials_reqs != [] then
             log("   Using this show's own specials requirements:\n" ^ "   " ^ string(this_show_specials_reqs))

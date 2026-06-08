@@ -497,10 +497,15 @@ cover_manager = file.cover.manager(
   default     = station_cover_default_path,
   mime_types  = [
     ("image/gif",  "gif"),
+    ("image/GIF",  "gif"),
     ("image/jpg",  "jpg"),
+    ("image/JPG",  "jpg"),
     ("image/jpeg", "jpg"),
+    ("image/JPEG", "jpg"),
     ("image/png",  "png"),
-    ("image/webp", "webp")
+    ("image/PNG",  "png"),
+    ("image/webp", "webp"),
+    ("image/WEBP", "webp")
   ]
 )
 

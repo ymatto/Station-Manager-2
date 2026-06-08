@@ -420,7 +420,7 @@ output.icecast(
 # metadata cache, so we can delay resolving requests, and to avoid continually looking up metadata from files themselves unnecessarily
 track_metadata_cache = ref([]) # [("/music/playlist/01-trackname.mp3", [("artist", "Big Name"), ... ]), ...]
 
-# list of readable recent tracks to push out on http endpoint
+# list of recent track and metadata info to push out on http endpoint
 recent_tracks_md_structs = ref ([])
 now_playing_metadata = ref([])
 now_playing_filtered_md_struct = ref({})
